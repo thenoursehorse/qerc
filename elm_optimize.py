@@ -1,7 +1,9 @@
 import sys
 import h5py
 from timeit import default_timer as timer
-from pathlib import Path 
+from pathlib import Path
+
+import argparse
 
 import numpy as np
 import scipy
@@ -329,35 +331,18 @@ class ELMData(object):
                 self.x_train = np.array( f['x'] )
                 self.x_train_std = np.array( f['x_std'] )
             
-if __name__ == '__main__':
-    # The parameters
-    print("Usage: python3 elm_optimize.py <N> <g> <N_samples_train> <N_samples_test> <hidden_size>")
-    if len(sys.argv) != 6:
-        sys.exit(1)
-    print('Argument List:', str(sys.argv))
-    N = int(sys.argv[1])
-    g = float(sys.argv[2])
-    N_samples_train = int(sys.argv[3])
-    N_samples_test = int(sys.argv[4])
-    hidden_size = int(sys.argv[5])
-
-    if N_samples_train < 0:
-        N_samples_train = 60000 # number of training samples
-    
-    if N_samples_test < 0:
-        N_samples_test = 10000 # number of training samples
-     
-    # Output data
-    elm_data = ELMData(N=N, g=g)
-    y_train = elm_data.get_y(N_samples=N_samples_train)
-    y_test = elm_data.get_y(N_samples=N_samples_test, test=True)
+def main(args):
+    # Get the data from the quantum reservoir
+    elm_data = ELMData(N=args.N, g=args.g)
+    y_train = elm_data.get_y(N_samples=args.N_samples_train)
+    y_test = elm_data.get_y(N_samples=args.N_samples_test, test=True)
     
     # Input data
     print("filename_train_x: ", elm_data.filename_train_x)
     x_file = Path(elm_data.filename_train_x)
     if not x_file.is_file():
         print("x_train data does not exist")
-        x_train = elm_data.get_x(N_samples=N_samples_train)
+        x_train = elm_data.get_x(N_samples=args.N_samples_train)
         elm_data.save_x()
     else:
         print("x_train data exists")
@@ -368,7 +353,7 @@ if __name__ == '__main__':
     x_file = Path(elm_data.filename_test_x)
     if not x_file.is_file():
         print("x_test data does not exist")
-        x_test = elm_data.get_x(N_samples=N_samples_test, test=True)
+        x_test = elm_data.get_x(N_samples=args.N_samples_test, test=True)
         elm_data.save_x(test=True)
     else:
         print("x_test data exists")
@@ -379,18 +364,24 @@ if __name__ == '__main__':
     output_size = elm_data.output_size
     
     # Number of hidden neurons in the elm part
-    if hidden_size == -1:
+    if args.hidden_size == -1:
         hidden_size = 784
-    elif hidden_size < -1:
+    elif args.hidden_size < -1:
         hidden_size = input_size
+    else:
+        hidden_size = args.hidden_size
 
-    elm = ELM(input_size, hidden_size)
+    elm = ELM(input_size=input_size, 
+              hidden_size=hidden_size,
+              activation=args.activation,
+              random=args.random,
+              pinv=args.pinv)
     
     # Train the ELM
     start = timer()
     y_train_pred = elm.train(x_train, y_train)
     end = timer()
-    print(f"g={g} elm took:", end-start)
+    print(f"g={args.g} elm took:", end-start)
     
     accuracy_train, mse_train, mae_train = elm.evaluate(y_pred=y_train_pred, y=y_train)
     print("Training mse: ", mse_train)
@@ -404,3 +395,26 @@ if __name__ == '__main__':
     print("Testing mae: ", mae_test)
     print("Testing accuracy: ", accuracy_test)
 
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-N', type=int, required=True)
+    parser.add_argument('-g', type=float, required=True)
+    parser.add_argument('-N_samples_train', type=float, default=60000)
+    parser.add_argument('-N_samples_test', type=float, default=10000)
+    parser.add_argument('-hidden_size', type=int, default=-1)
+    parser.add_argument('-activation',
+        choices=['softmax', 'sigmoid', 'hyperbolic', 'cos', 'identity'],
+        default='softmax',
+    )
+    parser.add_argument('-random',
+        choices=['uniform', 'normal'],
+        default='uniform',
+    )
+    parser.add_argument('-pinv',
+        choices=['numpy', 'scipy', 'jax', 'reginv', 'geninv'],
+        default='geninv',
+    )
+    
+    args = parser.parse_args()
+    print(args)
+    main(args)
