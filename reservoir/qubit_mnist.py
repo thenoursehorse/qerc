@@ -37,8 +37,7 @@ class PCAQubits:
 
         # keep 2*N coponents (N is # of qubits)
         pca = PCA(2*N)
-        #var = .95 # keep N components so fit is 95% variance retained
-        #pca = PCA(var)
+        #pca = PCA(.95) # keep N components so fit is 95% variance retained
 
         # Find pca representation
         pca.fit(self.train_x_scalar)
