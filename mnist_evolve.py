@@ -23,12 +23,17 @@ if __name__ == '__main__':
         default='ising',
     )
     parser.add_argument('-save', type=bool, defualt=True)
+    parser.add_argument('-filename_root', required=True)
 
+    args = parser.parse_args()
+    if args.alpha > 1e3:
+        args.alpha = np.alpha
+    print(args)
     args = parser.parse_args()
     print(args)
 
     filename = f'{args.model}_N_{args.N}_g_{args.g:0.3f}_alpha_{args.alpha:0.3f}'
-    directory = 'data/'+filename
+    directory = args.filename_root+filename
     Path(directory).mkdir(parents=True, exist_ok=True)
     filename = directory+'/'+filename
 

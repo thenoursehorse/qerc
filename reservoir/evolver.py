@@ -6,7 +6,7 @@ import copy
 
 import qutip as qt
 
-from hamiltonians import *
+from .hamiltonians import *
 
 def _evolve_state(H, psi0, tlist, e_ops=None):
     options = qt.Options(nsteps=4*2500)
