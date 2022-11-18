@@ -36,7 +36,7 @@ if __name__ == '__main__':
     filename = directory+'/'+filename
 
     # Get pca data of digits
-    input_data = PCAQubits(N=args.N)
+    input_data = PCAQubits(N=args.N, filename=args.filename_root)
 
     # Evolve all samples
     evolver = Evolver(N=args.N, 

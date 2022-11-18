@@ -6,9 +6,9 @@ from pathlib import Path
 import qutip as qt
 
 class PCAQubits:
-    def __init__(self, N, filename='data/mnist_pca', load=True):
+    def __init__(self, N, filename, load=True):
         self.N = N
-        self.filename = filename + f'_N_{N}.h5'
+        self.filename = filename + f'mnist_pca_N_{N}.h5'
 
         if load == True:
             if Path(self.filename).is_file():
@@ -73,11 +73,9 @@ class PCAQubits:
         self.test_phi[idx_max] = np.pi
         self.test_phi[idx_min] = 0
 
-    def save(self, filename=None):
-        if filename == None:
-            filename = self.filename
+    def save(self):
         
-        with h5py.File(filename, 'w') as f:
+        with h5py.File(self.filename, 'w') as f:
             f.create_dataset('train_theta', data=self.train_theta)
             f.create_dataset('train_phi', data=self.train_phi)
             f.create_dataset('train_y', data=self.train_y)
@@ -86,11 +84,9 @@ class PCAQubits:
             f.create_dataset('test_phi', data=self.test_phi)
             f.create_dataset('test_y', data=self.test_y)
 
-    def load(self, filename=None):
-        if filename == None:
-            filename = self.filename
+    def load(self):
         
-        with h5py.File(filename, 'r') as f:
+        with h5py.File(self.filename, 'r') as f:
             self.train_theta = np.array( f['train_theta'] )
             self.train_phi = np.array( f['train_phi'] )
             self.train_y = np.array( f['train_y'] )

@@ -54,7 +54,7 @@ if __name__ == '__main__':
     filename = directory+'/'+filename
     
     # Get raw input data of digits
-    input_data = PCAQubits(N=args.N)
+    input_data = PCAQubits(N=args.N, filename=args.filename_root)
 
     # Get x data from reservoir
     filename_train = filename+"_train"
