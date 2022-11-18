@@ -153,6 +153,7 @@ class Evolver(object):
                 start = timer()
         end = timer()
         print(f"sample {k}/{N_samples_train} took:", end-start)
+        print()
         
         print("Evolving all testing samples:")
         start = timer()
@@ -171,6 +172,7 @@ class Evolver(object):
                 start = timer()
         end = timer()
         print(f"sample {k}/{N_samples_test} took:", end-start)
+        print()
         
     @property
     def N(self):

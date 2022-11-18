@@ -16,7 +16,6 @@ def _geninv(G):
     # Full rank Cholesky factorization of A
     L = np.linalg.cholesky(A)
     #L = scipy.linalg.cholesky(A, lower=True)
-    #_, L, _ = scipy.linalg.lu(A)
     
     # Computation of the generalized inverse of G
     M = np.linalg.inv(L.conj().T @ L)
@@ -48,18 +47,25 @@ class ELM(object):
 
         rng = np.random.default_rng()
 
-        if self._random == 'uniform':
-            self._rand = rng.uniform
-            self._weight = self._rand(-1, 1, (self._hidden_size, self._input_size))
-            self._bias = self._rand(-1, 1, (self._hidden_size))
-       
-        elif self._random == 'normal':
-            self._rand = rng.standard_normal
-            self._weight = self._rand((self._hidden_size, self._input_size))
-            self._bias = self._rand((1, self._hidden_size))
-        
+        if self._activation != 'identity':
+            if self._random == 'uniform':
+                self._rand = rng.uniform
+                self._weight = self._rand(-1, 1, (self._hidden_size, self._input_size))
+                self._bias = self._rand(-1, 1, (self._hidden_size))
+           
+            elif self._random == 'normal':
+                self._rand = rng.standard_normal
+                self._weight = self._rand((self._hidden_size, self._input_size))
+                self._bias = self._rand((1, self._hidden_size))
+            
+            else:
+                raise ValueError(f'unknown random function type {self._random}.')
+
+        # Identity has no hidden layer, just optimizes the output weight beta
         else:
-            raise ValueError(f'unknown random function type {self._random}.')
+            self._rand = None
+            self._weight = None
+            self._bias = None
 
         self._H = 0
         self._beta = 0

@@ -1,3 +1,5 @@
+import numpy as np
+import qutip as qt
 
 def get_spin_ops(N, axis='z'):
     si = qt.qeye(2)

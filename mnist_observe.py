@@ -2,8 +2,7 @@ from pathlib import Path
 from distutils.util import strtobool
 import argparse
 
-from reservoir.qubit_mnist import PCAQubits
-from reservoir.evolver import Evolver
+from reservoir.observer import Observer
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -11,18 +10,13 @@ if __name__ == '__main__':
     parser.add_argument('-g', type=float, required=True)
     parser.add_argument('-filename_root', required=True)
     parser.add_argument('-alpha', type=float, default=1.51)
-    parser.add_argument('-dt', type=float, default=10)
-    parser.add_argument('-tf', type=float, default=50)
     parser.add_argument('-N_samples_train', type=float, default=60000)
     parser.add_argument('-N_samples_test', type=float, default=10000)
-    parser.add_argument('-solver',
-        choices=['mc', 'expm', 'expm_diag'],
-        default='expm',
-    )
     parser.add_argument('-model',
         choices=['ising', 'spin-1/2', 'spin-1'],
         default='ising',
     )
+    parser.add_argument('-delete_qu', type=lambda x: bool(strtobool(x)), default='False')
     parser.add_argument('-save', type=lambda x: bool(strtobool(x)), default='True')
 
     args = parser.parse_args()
@@ -35,21 +29,16 @@ if __name__ == '__main__':
     Path(directory).mkdir(parents=True, exist_ok=True)
     filename = directory+'/'+filename
 
-    # Get pca data of digits
-    input_data = PCAQubits(N=args.N)
+    # Measure all samples
+    observer = Observer(N=args.N, 
+                        filename=filename,
+                        N_samples_train=args.N_samples_train,
+                        N_samples_test=args.N_samples_test,
+                        save=args.save)
+    observer.observe_all()
 
-    # Evolve all samples
-    evolver = Evolver(N=args.N, 
-                      g=args.g,
-                      filename=filename,
-                      model=args.model, 
-                      solver=args.solver, 
-                      dt=args.dt, 
-                      tf=args.tf, 
-                      alpha=args.alpha, 
-                      N_samples_train=args.N_samples_train, 
-                      N_samples_test=args.N_samples_test,
-                      save=args.save)
-    evolver.evolve_all(input_data=input_data)
+    # Delete all of the qutip wavefunction files
+    if args.delete_qu:
+        observer.delete_qu_all()
     
     print("Finished.")
