@@ -18,8 +18,9 @@ if __name__ == '__main__':
     parser.add_argument('-alpha', type=float, default=1.51)
     parser.add_argument('-N_samples_train', type=float, default=60000)
     parser.add_argument('-N_samples_test', type=float, default=10000)
-    parser.add_argument('-hidden_size', type=int, default=-1)
-    parser.add_argument('-nt', type=int, default=-1)
+    parser.add_argument('-hsize_initial', type=int, default=-1)
+    parser.add_argument('-hsize_final', type=int, default=1000)
+    parser.add_argument('-hsize_step', type=int, default=500)
     parser.add_argument('-activation',
         choices=['softmax', 'sigmoid', 'hyperbolic', 'cos', 'identity'],
         default='softmax',
@@ -42,6 +43,7 @@ if __name__ == '__main__':
     )
     parser.add_argument('-standardize', type=lambda x: bool(strtobool(x)), default='False')
     parser.add_argument('-save', type=lambda x: bool(strtobool(x)), default='True')
+    parser.add_argument('-load', type=lambda x: bool(strtobool(x)), default='False')
     
     args = parser.parse_args()
     if args.alpha > 1e3:
@@ -113,91 +115,87 @@ if __name__ == '__main__':
     input_size = x_train_all.shape[-1]
     
     # Number of hidden neurons in the elm part
-    if args.hidden_size == -1:
-        hidden_size = 784
-    elif args.hidden_size < -1:
-        hidden_size = input_size
+    if args.activation == 'identity':
+        hidden_array = [0]
+    elif args.hsize_initial == -1:
+        hidden_array = np.array([784])
+    elif args.hsize_initial < -1:
+        hidden_array = np.array([input_size])
     else:
-        hidden_size = args.hidden_size
+        hidden_array = np.arange(args.hsize_initial, args.hsize_final + args.hsize_step/2.0, args.hsize_step, dtype=int)
+        hidden_array = np.append(hidden_array, [input_size, 784])
+        hidden_array.sort()
 
-    # To determine which time slices to take
-    if args.nt < 0:
-        Nt = x_train_all.shape[0]
-        N0 = 0
-    else:
-        Nt = args.nt
-        N0 = args.nt - 1
+    # Number of time slices
+    Nt = x_train_all.shape[0]
    
-    accuracy_train_all = []
-    accuracy_test_all = []
-    mse_train_all = []
-    mse_test_all = []
-    mae_train_all = []
-    mae_test_all = []
+    accuracy_train = np.empty(shape=(len(hidden_array), Nt))
+    accuracy_test = np.empty(shape=(len(hidden_array), Nt))
+    mse_train = np.empty(shape=(len(hidden_array), Nt))
+    mse_test = np.empty(shape=(len(hidden_array), Nt))
+    mae_train = np.empty(shape=(len(hidden_array), Nt))
+    mae_test = np.empty(shape=(len(hidden_array), Nt))
+    
+    for h in range(len(hidden_array)):
+        hidden_size = hidden_array[h]
+        print(f"ELM for hidden size = {hidden_size}")
+        for n in range(Nt):
+            # Take a time slice, indexed as time,sample,inputnode
+            x_train = x_train_all[n,:args.N_samples_train,:]
+            x_test = x_test_all[n,:args.N_samples_test,:]
+            
+            elm = ELM(input_size=input_size, 
+                      hidden_size=hidden_size,
+                      activation=args.activation,
+                      random=args.random,
+                      pinv=args.pinv)
 
-    for n in range(N0, Nt):
-        # Take a time slice, indexed as time,sample,inputnode
-        x_train = x_train_all[n,:args.N_samples_train,:]
-        x_test = x_test_all[n,:args.N_samples_test,:]
+            # FIXME standardizing x actually makes it worse and for some
+            # activation functions it is much much much worse
+            # Standardize x
+            if args.standardize:
+                x_train, x_test = elm.standardize(x_train, x_test)
+
+            # Make the one hot vectors
+            y_train, y_test = elm.onehot_y(y_train=input_data.train_y, y_test=input_data.test_y)
+         
+            # Train the ELM
+            start = timer()
+            try:
+                y_train_pred = elm.train(x_train, y_train)
+            except:
+                print(f"WARNING: elm training with {args.pinv} failed. Falling back to svd.")
+                elm._pinv = 'numpy'
+                y_train_pred = elm.train(x_train, y_train)
+            end = timer()
+            print(f"n = {n+1}/{Nt} elm took:", end-start)
         
-        elm = ELM(input_size=input_size, 
-                  hidden_size=hidden_size,
-                  activation=args.activation,
-                  random=args.random,
-                  pinv=args.pinv)
+            accuracy_train[h,n], mse_train[h,n], mae_train[h,n] = elm.evaluate(y_pred=y_train_pred, y=y_train)
+            print("Training accuracy: ", accuracy_train[h,n])
 
-        # FIXME standardizing x actually makes it worse and for some
-        # activation functions it is much much much worse
-        # Standardize x
-        if args.standardize:
-            x_train, x_test = elm.standardize(x_train, x_test)
+            y_test_pred = elm.predict(x_test)
+            accuracy_test[h,n], mse_test[h,n], mae_test[h,n] = elm.evaluate(y_pred=y_test_pred, y=y_test)
+            print("Testing accuracy: ", accuracy_test[h,n])
+            print()
 
-        # Make the one hot vectors
-        y_train, y_test = elm.onehot_y(y_train=input_data.train_y, y_test=input_data.test_y)
-     
-        # Train the ELM
-        start = timer()
-        y_train_pred = elm.train(x_train, y_train)
-        end = timer()
-        print(f"n = {n+1}/{Nt} elm took:", end-start)
-    
-        accuracy_train, mse_train, mae_train = elm.evaluate(y_pred=y_train_pred, y=y_train)
-        #print("Training mse: ", mse_train)
-        #print("Training mae: ", mae_train)
-        print("Training accuracy: ", accuracy_train)
-        #print()
-
-        y_test_pred = elm.predict(x_test)
-        accuracy_test, mse_test, mae_test = elm.evaluate(y_pred=y_test_pred, y=y_test)
-        #print("Testing mse: ", mse_test)
-        #print("Testing mae: ", mae_test)
-        print("Testing accuracy: ", accuracy_test)
-        print()
-
-        accuracy_train_all.append(accuracy_train)
-        accuracy_test_all.append(accuracy_test)
-        mse_train_all.append(mse_train)
-        mse_test_all.append(mse_test)
-        mae_train_all.append(mae_train)
-        mae_test_all.append(mae_test)
-    
     filename_elm = filename+"_elm"
     filename_elm += f"_nodetype_{args.node_type}"
     filename_elm += f"_activation_{args.activation}"
-    filename_elm += f"_hsize_{hidden_size}"
     filename_elm += ".h5"
-    with h5py.File(filename_elm, 'w') as f:
-        f.create_dataset('accuracy_train', data=accuracy_train_all)
-        f.create_dataset('accuracy_test', data=accuracy_test_all)
-        f.create_dataset('mse_train', data=mse_train_all)
-        f.create_dataset('mse_test', data=mse_test_all)
-        f.create_dataset('mae_train', data=mae_train_all)
-        f.create_dataset('mae_test', data=mae_test_all)
-        
-    #with h5py.File(filename_elm, 'r') as f:
-    #    accuracy_train = np.array(f['accuracy_train'])
-    #    accuracy_test = np.array(f['accuracy_test'])
-    #    mse_train = np.array(f['mse_train'])
-    #    mse_test = np.array(f['mse_test'])
-    #    mae_train = np.array(f['mae_train'])
-    #    mae_test = np.array(f['mae_test'])
+    if args.save:
+        with h5py.File(filename_elm, 'w') as f:
+            f.create_dataset('accuracy_train', data=accuracy_train)
+            f.create_dataset('accuracy_test', data=accuracy_test)
+            f.create_dataset('mse_train', data=mse_train)
+            f.create_dataset('mse_test', data=mse_test)
+            f.create_dataset('mae_train', data=mae_train)
+            f.create_dataset('mae_test', data=mae_test)
+
+    if args.load:
+        with h5py.File(filename_elm, 'r') as f:
+            accuracy_train = np.array(f['accuracy_train'])
+            accuracy_test = np.array(f['accuracy_test'])
+            mse_train = np.array(f['mse_train'])
+            mse_test = np.array(f['mse_test'])
+            mae_train = np.array(f['mae_train'])
+            mae_test = np.array(f['mae_test'])

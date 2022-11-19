@@ -2,6 +2,8 @@ from pathlib import Path
 from distutils.util import strtobool
 import argparse
 
+import numpy as np
+
 from reservoir.observer import Observer
 
 if __name__ == '__main__':

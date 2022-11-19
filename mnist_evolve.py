@@ -2,6 +2,8 @@ from pathlib import Path
 from distutils.util import strtobool
 import argparse
 
+import numpy as np
+
 from reservoir.qubit_mnist import PCAQubits
 from reservoir.evolver import Evolver
 
