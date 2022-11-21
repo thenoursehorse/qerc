@@ -30,7 +30,7 @@ if __name__ == '__main__':
         default='uniform',
     )
     parser.add_argument('-pinv',
-        choices=['numpy', 'scipy', 'jax', 'reginv', 'geninv'],
+        choices=['numpy', 'scipy', 'jax', 'reginv', 'IMqrginv', 'geninv'],
         default='geninv',
     )
     parser.add_argument('-model',
@@ -163,9 +163,10 @@ if __name__ == '__main__':
             start = timer()
             try:
                 y_train_pred = elm.train(x_train, y_train)
-            except:
-                print(f"WARNING: elm training with {args.pinv} failed. Falling back to svd.")
-                elm._pinv = 'numpy'
+            except Exception as e:
+                print(e)
+                print(f"WARNING: elm training with {args.pinv} failed. Falling back to IMqrginv.")
+                elm._pinv = 'IMqrginv'
                 y_train_pred = elm.train(x_train, y_train)
             end = timer()
             print(f"n = {n+1}/{Nt} elm took:", end-start)

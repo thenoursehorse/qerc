@@ -3,15 +3,24 @@ import scipy
         
 # From Fast Computation of Moore-Penrose Inverse Matrices by Pierre Courrieu 2005
 # Returns the Moore-Penrose inverse of the argument
-def _geninv(G):
+# The C factor is because cholesky requires a positive definite matrix,
+# and sometimes this is not satisfied on the order of 1e-12. Regularizing it
+# as in _reginv produces minimal error
+# This is fast because the cholesky decomposition is orders of magnitude faster 
+# than a full svd for very large matrices
+# Even for C = 0 this has a slight error compared to svd sometimes?
+# I think when A is not positive defininite introducing any round off error
+# has big affects on training accuracy (even if the psuedo inverse is numerically
+# very close to what is obtained with svd
+def _geninv(G, C=1e-10):
     # Transpose if m < n
     m, n = G.shape
     transpose = False
     if m < n:
         transpose = true
-        A = G @ G.conj().T
+        A = G @ G.conj().T #+ C*np.eye(G.shape[0])
     else:
-        A = G.conj().T @ G
+        A = G.conj().T @ G #+ C*np.eye(G.shape[1])
 
     # Full rank Cholesky factorization of A
     L = np.linalg.cholesky(A)
@@ -25,25 +34,106 @@ def _geninv(G):
         Y = L @ M @ M @ L.conj().T @ G.conj().T
     return Y
 
+# From http://dx.doi.org/10.1155/2014/641706
+# Still not as fast as geninv
+# But as accurate as svd (if don't use k), but just as slow
+# Also does not seem to run into problems with not being positive defininite
+def _IMqrginv(A, eps=None):
+    m, n = A.shape
+    Q, R = np.linalg.qr(A)
+    if eps != None:
+        eps = 1e-5 # recommendation from paper
+        # The k below introduces error for not much greater speed up
+        k = np.sum(np.any(np.abs(R) > epse, axis=1))
+        Q = Q[:,:k]
+        R = R[:k,:]
+    M = np.linalg.inv( R @ R.conj().T )
+    return R.conj().T @ M @ Q.conj().T
+    #return np.linalg.inv(R) @ Q.conj().T
+
 # Regularized psuedo inverse for regularized ELM
-def _reginv(A, C=1e10):
+def _reginv(A, C=1e-10):
     m, n = A.shape
     if m <= n :
-        left = A.conj().T @ A + (1.0/C)*np.eye(A.shape[-1])
+        left = A.conj().T @ A + C*np.eye(A.shape[-1])
         left_inv = np.linalg.inv(left)
         return left_inv @ A.conj().T
     else:
-        right = A @ A.conj().T + (1.0/C)*np.eye(A.shape[0])
+        right = A @ A.conj().T + C*np.eye(A.shape[0])
         right_inv = np.linalg.inv(right)
         return A.conj().T @ right_inv
 
+# Iterative method It24C2 from https://doi.org/10.1016/j.cam.2010.08.042
+# This isn't faster than svd or geninv, and not very accurate
+def _iterinv(A, beta=1.0, eps=1e-10, maxiter=2000):
+    alpha = 1.0 / (np.linalg.norm(A, ord=np.inf) * np.linalg.norm(A, ord=1))
+    #alpha = beta
+
+    # initialize Xk
+    Xk = alpha*A.conj().T
+
+    minnormd = np.inf
+    normd1 = np.inf
+
+    for i in range(maxiter):
+        Xk1 = (1.0+beta) * Xk - beta*Xk @ A @ Xk
+
+        normd = np.linalg.norm(Xk1 - Xk)
+        #normd = np.linalg.norm( A @ Xk1 @ A - A )
+
+        if normd < minnormd:
+            minnormd = normd
+            Xkmin = Xk
+
+        #if np.abs(normd/normd1 - 1.0 - beta) < eps:
+        if np.abs(normd) < eps:
+            break
+
+        normd1 = normd
+        Xk = Xk1
+
+    print(f"took {i} iterations")
+    return Xkmin
+
+# Iterative method "An iterative method to compute Moore-Penrose inverse based 
+# on gradient maximal convergence rate" by Sheng and Wang 2013
+# This is very unstable for poorly chosen beta. How is beta estimated in the 
+# original paper? It is not clear to me. Regardless, it is much slower than
+# other methods because of how many matrix products one has to take
+def _iterinv2(A, beta=0.0001, eps=1e-10, maxiter=2000):
+    alpha = 1.0
+
+    # Initialize Xk
+    Xk = alpha * A.conj().T
+        
+    minnormd = np.inf
+
+    for i in range(maxiter):
+        Xk1 = Xk + beta * A.conj().T @ (A - A @ Xk @ A) @ A.conj().T
+
+        normd = np.linalg.norm(Xk1 - Xk)
+        #normd = np.linalg.norm( A @ Xk1 @ A - A )
+        
+        if normd < minnormd:
+            minnormd = normd
+            Xkmin = Xk1
+
+        if np.abs(normd) < eps:
+            break
+
+        Xk = Xk1
+
+    print(f"took {i} iterations")
+    return Xkmin
+
 class ELM(object):
-    def __init__(self, input_size, hidden_size, activation='softmax', random='uniform', pinv='geninv'):
+    def __init__(self, input_size, hidden_size, activation='softmax', random='uniform', pinv='geninv', C=1e-10):
         self._input_size = input_size
         self._hidden_size = hidden_size
         self._activation = activation
         self._random = random
         self._pinv = pinv
+        self._C = C # regularization factor for pinv methods
 
         rng = np.random.default_rng()
 
@@ -122,10 +212,13 @@ class ELM(object):
             self._H_plus = jpinv(self._H)
         
         elif self._pinv == 'reginv':
-            self._H_plus = _reginv(self._H)
-        
+            self._H_plus = _reginv(self._H, C=self._C)
+
+        elif self._pinv == 'IMqrginv':
+            self._H_plus = _IMqrginv(self._H)
+
         elif self._pinv == 'geninv':
-            self._H_plus = _geninv(self._H)
+            self._H_plus = _geninv(self._H, C=self._C)
 
         else:
             raise ValueError(f'unknown psuedo inverse function {self._pinv}')
