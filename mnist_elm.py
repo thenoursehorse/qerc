@@ -43,7 +43,6 @@ if __name__ == '__main__':
     )
     parser.add_argument('-standardize', type=lambda x: bool(strtobool(x)), default='False')
     parser.add_argument('-save', type=lambda x: bool(strtobool(x)), default='True')
-    parser.add_argument('-load', type=lambda x: bool(strtobool(x)), default='False')
     
     args = parser.parse_args()
     if args.alpha > 1e3:
@@ -70,6 +69,11 @@ if __name__ == '__main__':
                              load=True)
     
     # Below are all samples at every time slice
+    tlist_train = observer_train.tlist
+    tlist_test = observer_test.tlist
+    
+    assert (tlist_train == tlist_test), 'training and testing must have same times !'
+    tlist = tlist_train
 
     # Measuring only in computational basis
     if args.node_type == 'rho_diag':
@@ -185,18 +189,11 @@ if __name__ == '__main__':
     filename_elm += ".h5"
     if args.save:
         with h5py.File(filename_elm, 'w') as f:
+            f.create_dataset('tlist', data=tlist)
+            f.create_dataset('hidden_array', data=hidden_array)
             f.create_dataset('accuracy_train', data=accuracy_train)
             f.create_dataset('accuracy_test', data=accuracy_test)
             f.create_dataset('mse_train', data=mse_train)
             f.create_dataset('mse_test', data=mse_test)
             f.create_dataset('mae_train', data=mae_train)
             f.create_dataset('mae_test', data=mae_test)
-
-    if args.load:
-        with h5py.File(filename_elm, 'r') as f:
-            accuracy_train = np.array(f['accuracy_train'])
-            accuracy_test = np.array(f['accuracy_test'])
-            mse_train = np.array(f['mse_train'])
-            mse_test = np.array(f['mse_test'])
-            mae_train = np.array(f['mae_train'])
-            mae_test = np.array(f['mae_test'])

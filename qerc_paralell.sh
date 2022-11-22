@@ -72,6 +72,6 @@ elm() {
 export -f elm
 
 # Run in parallel (indexed as alpha, N, g) using GNU parallel
-parallel -j${njobs} evolve ::: 1.51 10000 ::: $(seq 5 10) ::: $(seq 0 0.1 1.5)
+parallel -j${njobs} evolve ::: 1.51 10000 ::: $(seq 5 11) ::: $(seq 0 0.1 1.5)
 
-parallel -j${njobs} elm ::: 1.51 10000 ::: $(seq 5 10) ::: $(seq 0 0.1 1.5)
+parallel -j${njobs} elm ::: 1.51 10000 ::: $(seq 5 11) ::: $(seq 0 0.1 1.5)

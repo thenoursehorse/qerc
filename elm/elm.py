@@ -11,16 +11,16 @@ import scipy
 # Even for C = 0 this has a slight error compared to svd sometimes?
 # I think when A is not positive defininite introducing any round off error
 # has big affects on training accuracy (even if the psuedo inverse is numerically
-# very close to what is obtained with svd
+# very close to what is obtained with svd)
 def _geninv(G, C=1e-10):
     # Transpose if m < n
     m, n = G.shape
     transpose = False
     if m < n:
         transpose = true
-        A = G @ G.conj().T #+ C*np.eye(G.shape[0])
+        A = G @ G.conj().T + C*np.eye(G.shape[0])
     else:
-        A = G.conj().T @ G #+ C*np.eye(G.shape[1])
+        A = G.conj().T @ G + C*np.eye(G.shape[1])
 
     # Full rank Cholesky factorization of A
     L = np.linalg.cholesky(A)
