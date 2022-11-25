@@ -1,5 +1,6 @@
 import numpy as np
 import scipy
+from .nn import NeuralNetwork
         
 # From Fast Computation of Moore-Penrose Inverse Matrices by Pierre Courrieu 2005
 # Returns the Moore-Penrose inverse of the argument
@@ -126,14 +127,13 @@ def _iterinv2(A, beta=0.0001, eps=1e-10, maxiter=2000):
     print(f"took {i} iterations")
     return Xkmin
 
-class ELM(object):
-    def __init__(self, input_size, hidden_size, activation='softmax', random='uniform', pinv='geninv', C=1e-10):
-        self._input_size = input_size
+class ELM(NeuralNetwork):
+    def __init__(self, hidden_size, random='uniform', pinv='geninv', C=1e-10, **kwargs):
         self._hidden_size = hidden_size
-        self._activation = activation
         self._random = random
         self._pinv = pinv
         self._C = C # regularization factor for pinv methods
+        super().__init__(**kwargs)
 
         rng = np.random.default_rng()
 
@@ -159,43 +159,6 @@ class ELM(object):
 
         self._H = 0
         self._beta = 0
-
-    def activation_function(self, x):
-        if self._activation == 'softmax':
-            u = x @ self._weight.T + self._bias
-            upper = np.exp(u)
-            lower = np.sum(upper, axis=-1)
-            out = np.empty(shape=upper.shape)
-            for i in range(out.shape[0]):
-                out[i,:] = upper[i,:] / lower[i]
-            return out
-        
-        elif self._activation == 'sigmoid':
-            u = x @ self._weight.T + self._bias
-            return 1.0 / (1.0 + np.exp(-1.0 * u))
-        
-        elif self._activation == 'hyperbolic':
-            u = x @ self._weight.T + self._bias
-            a = np.exp(-u)
-            return (1.0 - a) / (1.0 + a)
-
-        elif self._activation == 'hard':
-            u = x @ self._weight.T + self._bias
-            idx_gr = u > 0
-            idx_ls = u <= 0
-            u[ idx_gr ] = 0
-            u[ idx_ls ] = 1
-            return u
-
-        elif self._activation == 'cos':
-            u = x @ self._weight.T + self._bias
-            return np.cos(u)
-
-        elif self._activation == 'identity':
-            return x
-
-        else:
-            raise ValueError(f'unknown activation function {self.activation}.')
 
     def train(self, x, y):
 
@@ -226,68 +189,13 @@ class ELM(object):
         self._beta = self._H_plus @ y
         return self._H @ self._beta
 
-    def evaluate(self, y_pred, y):
-        # Majority vote for 1 hot vectors
-        y_pred_trunc = np.argmax(y_pred, axis=-1)
-        y_trunc = np.argmax(y, axis=-1)
-
-        accuracy = np.sum(y_pred_trunc == y_trunc) / y.shape[0]
-        mse = np.mean((y_pred - y)**2)
-        mae = np.mean(np.abs(y_pred - y))
-        
-        return accuracy, mse, mae
-    
     def predict(self, x):
         return self.activation_function(x) @ self.beta
     
-    def onehot_y(self, y_train, y_test, M=10, binarizer=True):      
-        # Use sklearn binarizer to make one hot vectors
-        if binarizer:
-            from sklearn.preprocessing import LabelBinarizer
-            lb = LabelBinarizer()
-            lb.fit(y_train)
-            y_train = lb.transform(y_train).astype(int)
-            y_test = lb.transform(y_test).astype(int)
-            return y_train, y_test
-        
-        # Make one hot vectors of M categories
-        else:
-            N_samples_train = len(y_train)
-            T_train = np.zeros(shape=(N_samples_train, M))
-            x = [i for i in range(N_samples_train)]
-            T_train[x,y_train] = 1
-            
-            N_samples_test = len(y_test)
-            T_test = np.zeros(shape=(N_samples_test, M))
-            x = [i for i in range(N_samples_test)]
-            T_test[x,y_test] = 1
-            
-            return T_train, T_test
-        
-    def standardize(self, x_train, x_test):
-        from sklearn.preprocessing import StandardScaler
-        std_scalar = StandardScaler()
-        
-        # Standardize output of training set
-        std_scalar.fit(x_train)
-        x_train_std = std_scalar.transform(x_train)
-        
-        # Apply to test
-        x_test_std = std_scalar.transform(x_test)
-        
-        return x_train_std, x_test_std
-            
-    @property
-    def input_size(self):
-        return self._input_size
 
     @property
     def hidden_size(self):
         return self._hidden_size
-    
-    @property
-    def activation(self):
-        return self._activation
     
     @property
     def random(self):
@@ -298,20 +206,12 @@ class ELM(object):
         return self._pinv
     
     @property
-    def weight(self):
-        return self._weight
-    
-    @property
-    def bias(self):
-        return self._bias
-
-    @property
     def H(self):
-        return self.H
+        return self._H
 
     @property
     def H_plus(self):
-        return self.H_plus
+        return self._H_plus
     
     @property
     def beta(self):

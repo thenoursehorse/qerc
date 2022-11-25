@@ -1,10 +1,11 @@
-import h5py
 import numpy as np
 from scipy.optimize import curve_fit
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from pylab import cm
+        
+from nnetwork.nndata import NNData
 
 plt.rcParams.update({
     #'text.usetex' : True
@@ -27,6 +28,7 @@ class Plotter(object):
                        save=True,
                        show=False,
                        save_root='figs/',
+                       nn_type='elm'
                        ):
         self._g_list = g_list
         self._N_list = N_list
@@ -35,6 +37,7 @@ class Plotter(object):
         self._node_type = node_type
         self._activation = activation
         self._filename_root = filename_root
+        self._nn_type = nn_type
         
         self._column_width = column_width
         self._full_column_width = full_column_width
@@ -45,33 +48,48 @@ class Plotter(object):
 
     def load(self):
         filename = f'{self._model}_N_{self._N}_g_{self._g:0.3f}_alpha_{self._alpha:0.3f}'
-        filename_elm = self._filename_root
-        filename_elm += filename+"/"+filename
-        filename_elm += "_elm"
-        filename_elm += f"_nodetype_{self._node_type}"
-        filename_elm += f"_activation_{self._activation}"
-        filename_elm += ".h5"
+        filename += self._filename_root
+        filename += filename+"/"+filename
+        filename += "_" + self._nn_type + "_"
+        filename += f"_nodetype_{self._node_type}"
+        filename += f"_activation_{self._activation}"
+        filename += ".h5"
         
-        with h5py.File(filename_elm, 'r') as f:
-            #self._hidden_array = np.array(f['hidden_array'])
-            #self._tlist = np.array(f['tlist'])
-            self._accuracy_train = np.array(f['accuracy_train'])
-            self._accuracy_test = np.array(f['accuracy_test'])
-            self._mse_train = np.array(f['mse_train'])
-            self._mse_test = np.array(f['mse_test'])
-            self._mae_train = np.array(f['mae_train'])
-            self._mae_test = np.array(f['mae_test'])
+        data = NNData(filename=filename)
+        data.load()
+        
+        self._tlist = data.tlist
+        self._accuracy_train = data.accuracy_train
+        self._accuracy_test = data.accuracy_test
+        self._mse_train = data.mse_train
+        self._mse_test = data.mse_test
+        self._mae_train = data.mae_train
+        self._mae_test = data.mae_test
+        
+        if self._nn_type == 'elm':
+            self._hidden_array = data.hidden_array
+        
+        elif self._nn_type == 'perceptron':
+            self._x_entropy_train = data.x_entropy_train
+            self._x_entropy_test = data.x_entropy_test
+            self._avg_train = data.avg_train
+            self._avg_test = data.avg_test
+            self._std_train = data.std_train
+            self._std_test = data.std_test
 
-            # FIXME
-            input_size = 2**6
-            hidden_array = np.arange(500, 4000 + 500/2.0, 500, dtype=int)
-            hidden_array = np.append(hidden_array, [input_size, 784])
-            hidden_array.sort()
-            self._hidden_array = hidden_array
-            if self._activation == 'identity':
-                self._hidden_array = np.array([784])
+        else:
+            raise ValueError(f"Unrecognized neural network type !")
 
-            self._tlist = np.arange(0, 5+0.5/2.0, 0.5)
+        ## FIXME
+        #input_size = 2**self._N
+        #hidden_array = np.arange(500, 4000 + 500/2.0, 500, dtype=int)
+        #hidden_array = np.append(hidden_array, [input_size, 784])
+        #hidden_array.sort()
+        #self._hidden_array = hidden_array
+        #if self._activation == 'identity':
+        #    self._hidden_array = np.array([0])
+        #    
+        #self._tlist = np.arange(0, 5+0.5/2.0, 0.5)
 
     def power_func(self, x, a, b, c):
         return a * np.power(x, b) + c

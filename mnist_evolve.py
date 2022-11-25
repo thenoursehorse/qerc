@@ -4,7 +4,7 @@ import argparse
 
 import numpy as np
 
-from reservoir.qubit_mnist import PCAQubits
+from encoder.qubit_mnist import PCAQubits
 from reservoir.evolver import Evolver
 
 if __name__ == '__main__':

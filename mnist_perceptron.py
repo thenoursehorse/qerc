@@ -3,11 +3,10 @@ import argparse
 from distutils.util import strtobool
 from timeit import default_timer as timer
 
-import h5py
 import numpy as np
 
 from encoder.qubit_mnist import PCAQubits
-from nnetwork.elm import ELM
+from nnetwork.perceptron import Perceptron
 from reservoir.observer import Observer
 
 if __name__ == '__main__':
@@ -18,20 +17,9 @@ if __name__ == '__main__':
     parser.add_argument('-alpha', type=float, default=1.51)
     parser.add_argument('-N_samples_train', type=float, default=60000)
     parser.add_argument('-N_samples_test', type=float, default=10000)
-    parser.add_argument('-hsize_initial', type=int, default=-1)
-    parser.add_argument('-hsize_final', type=int, default=1000)
-    parser.add_argument('-hsize_step', type=int, default=500)
     parser.add_argument('-activation',
         choices=['softmax', 'sigmoid', 'hyperbolic', 'cos', 'identity'],
         default='softmax',
-    )
-    parser.add_argument('-random',
-        choices=['uniform', 'normal'],
-        default='uniform',
-    )
-    parser.add_argument('-pinv',
-        choices=['numpy', 'scipy', 'jax', 'reginv', 'IMqrginv', 'geninv'],
-        default='geninv',
     )
     parser.add_argument('-model',
         choices=['ising', 'spin-1/2', 'spin-1'],
@@ -41,7 +29,13 @@ if __name__ == '__main__':
         choices=['rho_diag', 'psi', 'corr', 'entanglement'],
         default='rho_diag',
     )
-    parser.add_argument('-standardize', type=lambda x: bool(strtobool(x)), default='False')
+    parser.add_argument('-N_epochs', type=int, default=100)
+    parser.add_argument('-stats_stride', type=int, default=10)
+    parser.add_argument('-M', type=int, default=100)
+    parser.add_argument('-eta', type=float, default=1.0)
+    parser.add_argument('-gamma', type=float, default=0.0)
+    parser.add_argument('-rho', type=float, default=0.95)
+    parser.add_argument('-standardize', type=lambda x: bool(strtobool(x)), default='True')
     parser.add_argument('-save', type=lambda x: bool(strtobool(x)), default='True')
     
     args = parser.parse_args()
@@ -118,96 +112,107 @@ if __name__ == '__main__':
     # Number of input nuerons
     input_size = x_train_all.shape[-1]
     
-    # Number of hidden neurons in the elm part
-    if args.activation == 'identity':
-        hidden_array = [0]
-    elif args.hsize_initial == -1:
-        hidden_array = np.array([784])
-    elif args.hsize_initial < -1:
-        hidden_array = np.array([input_size])
-    else:
-        hidden_array = np.arange(args.hsize_initial, args.hsize_final + args.hsize_step/2.0, args.hsize_step, dtype=int)
-        hidden_array = np.append(hidden_array, [input_size, 784])
-        hidden_array.sort()
-
     # Number of time slices
     Nt = x_train_all.shape[0]
-   
-    accuracy_train = np.empty(shape=(len(hidden_array), Nt))
-    accuracy_test = np.empty(shape=(len(hidden_array), Nt))
-    mse_train = np.empty(shape=(len(hidden_array), Nt))
-    mse_test = np.empty(shape=(len(hidden_array), Nt))
-    mae_train = np.empty(shape=(len(hidden_array), Nt))
-    mae_test = np.empty(shape=(len(hidden_array), Nt))
+
+    # There are 10 categories for MNIST
+    output_size = 10
+
+    accuracy_train = np.empty(shape=(args.N_epochs, Nt))
+    accuracy_test = np.empty(shape=(args.N_epochs, Nt))
+    mse_train = np.empty(shape=(args.N_epochs, Nt))
+    mse_test = np.empty(shape=(args.N_epochs, Nt))
+    mae_train = np.empty(shape=(args.N_epochs, Nt))
+    mae_test = np.empty(shape=(args.N_epochs, Nt))
+    x_entropy_train = np.empty(shape=(args.N_epochs, Nt))
+    x_entropy_test = np.empty(shape=(args.N_epochs, Nt))
+
+    avg_train = np.empty(shape=(Nt))
+    std_train = np.empty(shape=(Nt))
+    avg_test = np.empty(shape=(Nt))
+    std_test = np.empty(shape=(Nt))
     
-    for h in range(len(hidden_array)):
-        hidden_size = hidden_array[h]
-        print(f"ELM for hidden size = {hidden_size}")
-        for n in range(Nt):
-            # Take a time slice, indexed as time,sample,inputnode
-            x_train = x_train_all[n,:args.N_samples_train,:]
-            x_test = x_test_all[n,:args.N_samples_test,:]
+    for n in range(Nt):
+        # Take a time slice, indexed as time,sample,inputnode
+        x_train = x_train_all[n,:args.N_samples_train,:]
+        x_test = x_test_all[n,:args.N_samples_test,:]
             
-            elm = ELM(input_size=input_size, 
-                      hidden_size=hidden_size,
-                      activation=args.activation,
-                      random=args.random,
-                      pinv=args.pinv)
+        perceptron = Perceptron(input_size=input_size, 
+                                output_size=output_size,
+                                N_epochs=args.N_epochs,
+                                activation=args.activation,
+                                M=args.M,
+                                eta=args.eta,
+                                gamma=args.gamma,
+                                rho=args.rho,
+                                observe=True)
 
-            # FIXME standardizing x actually makes it worse and for some
-            # activation functions it is much much much worse
-            # Standardize x
-            if args.standardize:
-                x_train, x_test = elm.standardize(x_train, x_test)
+        # Standardize x
+        if args.standardize:
+            x_train, x_test = perceptron.standardize(x_train, x_test)
 
-            # Make the one hot vectors
-            y_train, y_test = elm.onehot_y(y_train=input_data.train_y, y_test=input_data.test_y)
+        # Make the one hot vectors
+        y_train, y_test = perceptron.onehot_y(y_train=input_data.train_y, y_test=input_data.test_y)
          
-            # Train the ELM
-            start = timer()
-            try:
-                y_train_pred = elm.train(x=x_train, y=y_train)
-            except Exception as e:
-                print(e)
-                print(f"WARNING: elm training with {args.pinv} failed. Falling back to IMqrginv.")
-                elm._pinv = 'IMqrginv'
-                y_train_pred = elm.train(x=x_train, y=y_train)
-            end = timer()
-            print(f"n = {n+1}/{Nt} elm took:", end-start)
+        # Train the perceptron and take some obvservations
+        start = timer()
+        y_train_pred, y_test_pred = perceptron.train(x_train=x_train, x_test=x_test, y_train=y_train, y_test=y_test)
+        end = timer()
+        print(f"n = {n+1}/{Nt} perceptron took:", end-start)
+
+        accuracy_train[:,n] = perceptron.accuracy_train 
+        mse_train[:,n] = perceptron.mse_train 
+        mae_train[:,n] = perceptron.mae_train 
+        x_entropy_train[:,n] = perceptron.x_entropy_train
+        avg_train[n] = np.mean(accuracy_train[-args.stats_stride:-1,n])
+        std_train[n] = np.std(accuracy_train[-args.stats_stride:-1,n])
+        print("Training accuracy mean: ", avg_train[n])
+        print("Training accuracy std: ", std_train[n])
+
+        accuracy_test[:,n] = perceptron.accuracy_test
+        mse_test[:,n] = perceptron.mse_test
+        mae_test[:,n] = perceptron.mae_test
+        x_entropy_test[:,n] = perceptron.x_entropy_test
+        avg_test[n] = np.mean(accuracy_test[-args.stats_stride:-1,n])
+        std_test[n] = np.std(accuracy_test[-args.stats_stride:-1,n])
+        print("Testing accuracy mean: ", avg_test[n])
+        print("Testing accuracy std: ", std_test[n])
+        print()
         
-            accuracy_train[h,n], mse_train[h,n], mae_train[h,n] = elm.evaluate(y_pred=y_train_pred, y=y_train)
-            print("Training accuracy: ", accuracy_train[h,n])
-
-            y_test_pred = elm.predict(x_test)
-            accuracy_test[h,n], mse_test[h,n], mae_test[h,n] = elm.evaluate(y_pred=y_test_pred, y=y_test)
-            print("Testing accuracy: ", accuracy_test[h,n])
-            print()
-
     if args.save:
         from nnetwork.nndata import NNData
             
-        filename_elm = filename+"_elm"
-        filename_elm += f"_nodetype_{args.node_type}"
-        filename_elm += f"_activation_{args.activation}"
-        filename_elm += ".h5"
+        filename_perc = filename+"_perceptron"
+        filename_perc += f"_nodetype_{args.node_type}"
+        filename_perc += f"_activation_{args.activation}"
+        filename_perc += ".h5"
 
-        nndata = NNData(filename=filename_elm,
+        nndata = NNData(filename=filename_perc,
                         tlist=tlist,
-                        hidden_array=hidden_array,
                         accuracy_train=accuracy_train,
                         accuracy_test=accuracy_test,
                         mse_train=mse_train,
                         mse_test=mse_test,
                         mae_train=mae_train,
+                        x_entropy_train=x_entropy_train,
+                        x_entropy_test=x_entropy_test,
+                        avg_train=avg_train,
+                        avg_test=avg_test,
+                        std_train=std_train,
+                        std_test=std_test,
                         N=args.N,
                         g=args.g,
                         alpha=args.alpha,
                         N_samples_train=args.N_samples_train,
                         N_samples_test=args.N_samples_test,
                         activation=args.activation,
-                        random=args.random,
-                        pinv=args.pinv,
                         model=args.model,
                         node_type=args.node_type,
-                        standardize=args.standardize)
-        nndata.save()    
+                        standardize=args.standardize,
+                        N_epochs=args.N_epochs,
+                        stats_stride=args.stats_stride,
+                        M=args.M,
+                        eta=args.eta,
+                        gamma=args.gamma,
+                        rho=args.rho)
+        nndata.save() 
