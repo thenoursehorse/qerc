@@ -1,5 +1,10 @@
 #!/bin/bash
 
+N_arr=$(seq 5 11)
+#g_arr=$(seq 0.91 0.01 1.09)
+g_arr=$(seq 0 0.1 1.5)
+alpha_arr=(1.51 10000)
+
 # for N=10 can use about 3.5% of memory on this workstation
 #njobs=25
 njobs=32
@@ -82,20 +87,19 @@ perceptron() {
           -filename_root ${filename_root} -model ${model} -node_type 'rho_diag' \
           &> ${outfile_per}
 
-  python3 -u ${exec_folder}/mnist_per.py -N ${N} -g ${g} -alpha ${alpha} \ 
+  python3 -u ${exec_folder}/mnist_perceptron.py -N ${N} -g ${g} -alpha ${alpha} \ 
           -filename_root ${filename_root} -model ${model} -node_type 'psi' \
           &>> ${outfile_per}
 
-  python3 -u ${exec_folder}/mnist_per.py -N ${N} -g ${g} -alpha ${alpha} \
-          -hsize_initial ${hsize_initial} -hsize_final ${hsize_final} -hsize_step ${hsize_step} \
+  python3 -u ${exec_folder}/mnist_perceptron.py -N ${N} -g ${g} -alpha ${alpha} \
           -filename_root ${filename_root} -model ${model} -node_type 'corr' \
           &>> ${outfile_per}
 }
 export -f perceptron
 
 # Run in parallel (indexed as alpha, N, g) using GNU parallel
-parallel -j${njobs} evolve ::: 1.51 10000 ::: $(seq 5 11) ::: $(seq 0 0.1 1.5)
+parallel -j${njobs} evolve ::: ${alpha_arr} ::: ${N_arr} ::: ${g_arr}
 
-parallel -j${njobs} elm ::: 1.51 10000 ::: $(seq 5 11) ::: $(seq 0 0.1 1.5)
+parallel -j${njobs} elm ::: ${alpha_arr} ::: ${N_arr} ::: ${g_arr}
 
-parallel -j${njobs} perceptron ::: 1.51 10000 ::: $(seq 5 11) ::: $(seq 0 0.1 1.5)
+parallel -j${njobs} perceptron ::: ${alpha_arr} ::: ${N_arr} ::: ${g_arr}
