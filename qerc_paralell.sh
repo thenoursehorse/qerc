@@ -71,7 +71,31 @@ elm() {
 }
 export -f elm
 
+perceptron() { 
+  alpha=$1
+  N=$2
+  g=$3
+
+  outfile_per=perceptron_${model}_N_${N}_g_${g}_alpha_${alpha}.out
+
+  python3 -u ${exec_folder}/mnist_perceptron.py -N ${N} -g ${g} -alpha ${alpha} \
+          -filename_root ${filename_root} -model ${model} -node_type 'rho_diag' \
+          &> ${outfile_per}
+
+  python3 -u ${exec_folder}/mnist_per.py -N ${N} -g ${g} -alpha ${alpha} \ 
+          -filename_root ${filename_root} -model ${model} -node_type 'psi' \
+          &>> ${outfile_per}
+
+  python3 -u ${exec_folder}/mnist_per.py -N ${N} -g ${g} -alpha ${alpha} \
+          -hsize_initial ${hsize_initial} -hsize_final ${hsize_final} -hsize_step ${hsize_step} \
+          -filename_root ${filename_root} -model ${model} -node_type 'corr' \
+          &>> ${outfile_per}
+}
+export -f perceptron
+
 # Run in parallel (indexed as alpha, N, g) using GNU parallel
 parallel -j${njobs} evolve ::: 1.51 10000 ::: $(seq 5 11) ::: $(seq 0 0.1 1.5)
 
 parallel -j${njobs} elm ::: 1.51 10000 ::: $(seq 5 11) ::: $(seq 0 0.1 1.5)
+
+parallel -j${njobs} perceptron ::: 1.51 10000 ::: $(seq 5 11) ::: $(seq 0 0.1 1.5)
