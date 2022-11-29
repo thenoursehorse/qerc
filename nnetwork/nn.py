@@ -6,16 +6,18 @@ class NeuralNetwork(object):
         self._input_size = input_size
         self._activation = activation
 
+    def _log_sum_exp(self, x):
+        A = x.max(axis=-1)
+        return A + np.log(np.sum(np.exp(x - A[:,None]), axis=-1))
+
     def activation_function(self, x):
         if self._activation == 'softmax':
             u = x @ self._weight.T + self._bias
-            upper = np.exp(u)
-            lower = np.sum(upper, axis=-1)
-            out = np.empty(shape=upper.shape)
-            for i in range(out.shape[0]):
-                out[i,:] = upper[i,:] / lower[i]
-            return out
-        
+
+            lower = self._log_sum_exp(u)
+            u -= lower[:,None]
+            return np.exp(u)
+
         elif self._activation == 'sigmoid':
             u = x @ self._weight.T + self._bias
             return 1.0 / (1.0 + np.exp(-1.0 * u))
@@ -47,6 +49,7 @@ class NeuralNetwork(object):
     # Indexed as # samples, output_size
     def cross_entropy(self, y_pred, y):
         return np.sum( - np.sum(y * np.log(y_pred), axis=1) ) / y.shape[0]
+        #return np.sum(np.log( np.prod(np.exp(-y) * y_pred, axis=-1) )) / y.shape[0]
 
     def evaluate(self, y_pred, y, x_entropy=False):
         # Majority vote for 1 hot vectors

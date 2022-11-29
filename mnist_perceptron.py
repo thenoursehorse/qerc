@@ -124,8 +124,8 @@ if __name__ == '__main__':
     mse_test = np.empty(shape=(args.N_epochs, Nt))
     mae_train = np.empty(shape=(args.N_epochs, Nt))
     mae_test = np.empty(shape=(args.N_epochs, Nt))
-    x_entropy_train = np.empty(shape=(args.N_epochs, Nt))
-    x_entropy_test = np.empty(shape=(args.N_epochs, Nt))
+    #x_entropy_train = np.empty(shape=(args.N_epochs, Nt))
+    #x_entropy_test = np.empty(shape=(args.N_epochs, Nt))
 
     avg_train = np.empty(shape=(Nt))
     std_train = np.empty(shape=(Nt))
@@ -163,7 +163,7 @@ if __name__ == '__main__':
         accuracy_train[:,n] = perceptron.accuracy_train 
         mse_train[:,n] = perceptron.mse_train 
         mae_train[:,n] = perceptron.mae_train 
-        x_entropy_train[:,n] = perceptron.x_entropy_train
+        #x_entropy_train[:,n] = perceptron.x_entropy_train
         avg_train[n] = np.mean(accuracy_train[-args.stats_stride:-1,n])
         std_train[n] = np.std(accuracy_train[-args.stats_stride:-1,n])
         print("Training accuracy mean: ", avg_train[n])
@@ -172,7 +172,7 @@ if __name__ == '__main__':
         accuracy_test[:,n] = perceptron.accuracy_test
         mse_test[:,n] = perceptron.mse_test
         mae_test[:,n] = perceptron.mae_test
-        x_entropy_test[:,n] = perceptron.x_entropy_test
+        #x_entropy_test[:,n] = perceptron.x_entropy_test
         avg_test[n] = np.mean(accuracy_test[-args.stats_stride:-1,n])
         std_test[n] = np.std(accuracy_test[-args.stats_stride:-1,n])
         print("Testing accuracy mean: ", avg_test[n])
@@ -194,8 +194,9 @@ if __name__ == '__main__':
                         mse_train=mse_train,
                         mse_test=mse_test,
                         mae_train=mae_train,
-                        x_entropy_train=x_entropy_train,
-                        x_entropy_test=x_entropy_test,
+                        mae_test =mae_test,
+                        #x_entropy_train=x_entropy_train,
+                        #x_entropy_test=x_entropy_test,
                         avg_train=avg_train,
                         avg_test=avg_test,
                         std_train=std_train,

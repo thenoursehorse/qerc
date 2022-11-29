@@ -98,8 +98,8 @@ perceptron() {
 export -f perceptron
 
 # Run in parallel (indexed as alpha, N, g) using GNU parallel
-parallel -j${njobs} evolve ::: ${alpha_arr} ::: ${N_arr} ::: ${g_arr}
+parallel -j${njobs} evolve ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
 
-parallel -j${njobs} elm ::: ${alpha_arr} ::: ${N_arr} ::: ${g_arr}
+parallel -j${njobs} elm ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
 
-parallel -j${njobs} perceptron ::: ${alpha_arr} ::: ${N_arr} ::: ${g_arr}
+parallel -j${njobs} perceptron ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"

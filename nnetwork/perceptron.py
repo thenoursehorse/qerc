@@ -15,6 +15,8 @@ class Perceptron(NeuralNetwork):
         self._observe = observe
         super().__init__(**kwargs)
 
+        assert (self._activation == 'softmax'), 'Can only use softmax activation function for perceptron !'
+
         if (np.abs(self._rho) > 0.01) and (np.abs(self._gamma) > 0.01):
             print("WARNING: Doing momentum and AdaDelta at the same time can be risky. You should know what you're doing !")
             print("For AdaDelta: gamma = 0")
@@ -23,16 +25,22 @@ class Perceptron(NeuralNetwork):
         # Initialize weights to zero
         self._weight = np.zeros(shape=(self._output_size, self._input_size))
         self._bias = np.zeros(shape=(self._output_size))
+        
+        # Randomize weights
+        #rng = np.random.default_rng()
+        #self._rand = rng.uniform
+        #self._weight = self._rand(-1, 1, (self._output_size, self._input_size))
+        #self._bias = self._rand(-1, 1, (self._output_size))
 
         # To hold data
         self._accuracy_train = np.empty(shape=self._N_epochs)
-        self._mse_train = np.empty(shape=self._N_epochs)
-        self._mae_train = np.empty(shape=self._N_epochs)
-        self._x_entropy_train = np.empty(shape=self._N_epochs)
         self._accuracy_test = np.empty(shape=self._N_epochs)
+        self._mse_train = np.empty(shape=self._N_epochs)
         self._mse_test = np.empty(shape=self._N_epochs)
+        self._mae_train = np.empty(shape=self._N_epochs)
         self._mae_test = np.empty(shape=self._N_epochs)
-        self._x_entropy_test = np.empty(shape=self._N_epochs)
+        #self._x_entropy_train = np.empty(shape=self._N_epochs)
+        #self._x_entropy_test = np.empty(shape=self._N_epochs)
            
     # [deriv]_ij = [X.T (Y_pred - Y)]_ij / N_samples
     def weight_deriv(self, x, y_pred, y, M):
@@ -72,9 +80,11 @@ class Perceptron(NeuralNetwork):
                 if trigger == True:
                     trigger = False
                     y_train_pred_full = self.predict(x_train)
-                    self._accuracy_train[n_epochs], self._mse_train[n_epochs], self._mae_train[n_epochs], self._x_entropy_train[n_epochs] = self.evaluate(y_pred=y_train_pred_full, y=y_train, x_entropy=True)
+                    #self._accuracy_train[n_epochs], self._mse_train[n_epochs], self._mae_train[n_epochs], self._x_entropy_train[n_epochs] = self.evaluate(y_pred=y_train_pred_full, y=y_train, x_entropy=True)
+                    self._accuracy_train[n_epochs], self._mse_train[n_epochs], self._mae_train[n_epochs] = self.evaluate(y_pred=y_train_pred_full, y=y_train)
                     y_test_pred_full = self.predict(x_test)
-                    self._accuracy_test[n_epochs], self._mse_test[n_epochs], self._mae_test[n_epochs], self._x_entropy_test[n_epochs] = self.evaluate(y_pred=y_test_pred_full, y=y_test, x_entropy=True)
+                    #self._accuracy_test[n_epochs], self._mse_test[n_epochs], self._mae_test[n_epochs], self._x_entropy_test[n_epochs] = self.evaluate(y_pred=y_test_pred_full, y=y_test, x_entropy=True)
+                    self._accuracy_test[n_epochs], self._mse_test[n_epochs], self._mae_test[n_epochs] = self.evaluate(y_pred=y_test_pred_full, y=y_test)
             
             # Determine the indices of the current batch
             idx = np.array(range(n*M, (n+1)*M)) % N_samples
@@ -157,10 +167,10 @@ class Perceptron(NeuralNetwork):
     def mae_test(self):
         return self._mae_test
     
-    @property
-    def x_entropy_train(self):
-        return self._x_entropy_train
+    #@property
+    #def x_entropy_train(self):
+    #    return self._x_entropy_train
 
-    @property 
-    def x_entropy_test(self):
-        return self._x_entropy_test
+    #@property 
+    #def x_entropy_test(self):
+    #    return self._x_entropy_test

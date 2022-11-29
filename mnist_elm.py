@@ -199,6 +199,7 @@ if __name__ == '__main__':
                         mse_train=mse_train,
                         mse_test=mse_test,
                         mae_train=mae_train,
+                        mae_test=mae_test,
                         N=args.N,
                         g=args.g,
                         alpha=args.alpha,
