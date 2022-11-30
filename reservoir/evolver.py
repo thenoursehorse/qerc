@@ -93,7 +93,7 @@ class Evolver(object):
     def set_H(self):
         # Construct Hamiltonian
         if self._model == 'ising':
-            self._H = ising_hamiltonian(N=self._N, g=self._g)
+            self._H = ising_hamiltonian(N=self._N, g=self._g, alpha=self._alpha)
         elif self._model == 'spin-1/2':
             raise ValueError(f'{self._model} not implemented yet !')
         elif self._model == 'spin-1':

@@ -2,9 +2,10 @@
 import numpy as np
 
 class NeuralNetwork(object):
-    def __init__(self, input_size, activation='softmax'):
+    def __init__(self, input_size, activation='softmax', identity_bias=True):
         self._input_size = input_size
         self._activation = activation
+        self._identity_bias = identity_bias
 
     def _log_sum_exp(self, x):
         A = x.max(axis=-1)
@@ -14,9 +15,12 @@ class NeuralNetwork(object):
         if self._activation == 'softmax':
             u = x @ self._weight.T + self._bias
 
-            lower = self._log_sum_exp(u)
-            u -= lower[:,None]
-            return np.exp(u)
+            #lower = self._log_sum_exp(u)
+            #u -= lower[:,None]
+            #return np.exp(u)
+
+            e = np.exp(u - np.max(u, axis=-1)[:,None])
+            return e / np.sum(e, axis=-1, keepdims=True)
 
         elif self._activation == 'sigmoid':
             u = x @ self._weight.T + self._bias
@@ -24,8 +28,8 @@ class NeuralNetwork(object):
         
         elif self._activation == 'hyperbolic':
             u = x @ self._weight.T + self._bias
-            a = np.exp(-u)
-            return (1.0 - a) / (1.0 + a)
+            e = np.exp(-u)
+            return (1.0 - e) / (1.0 + e)
 
         elif self._activation == 'hard':
             u = x @ self._weight.T + self._bias
@@ -40,7 +44,11 @@ class NeuralNetwork(object):
             return np.cos(u)
 
         elif self._activation == 'identity':
-            return x
+            # From PRL 127, 100502 (2021) adding a constant bias of 1 helps optimize the training
+            if self._identity_bias:
+                return np.hstack([x, np.ones((x.shape[0],1))])
+            else:
+                return x
 
         else:
             raise ValueError(f'unknown activation function {self.activation}.')
@@ -48,7 +56,7 @@ class NeuralNetwork(object):
     # Cross entropy
     # Indexed as # samples, output_size
     def cross_entropy(self, y_pred, y):
-        return np.sum( - np.sum(y * np.log(y_pred), axis=1) ) / y.shape[0]
+        return np.sum( - np.sum(y * np.log(y_pred), axis=-1) ) / y.shape[0]
         #return np.sum(np.log( np.prod(np.exp(-y) * y_pred, axis=-1) )) / y.shape[0]
 
     def evaluate(self, y_pred, y, x_entropy=False):
@@ -61,7 +69,7 @@ class NeuralNetwork(object):
         mae = np.mean(np.abs(y_pred - y))
         
         if x_entropy:
-            x_entropy = self.cross_entropy(y_pred, y)
+            x_entropy = self.cross_entropy(y_pred=y_pred, y=y)
             return accuracy, mse, mae, x_entropy
         return accuracy, mse, mae
         

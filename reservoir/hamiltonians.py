@@ -27,7 +27,7 @@ def get_spin_ops(N, axis='z'):
         s_list.append(qt.tensor(op_list))
     return s_list
 
-def ising_hamiltonian(N, g, alpha=1.51):
+def ising_hamiltonian(N, g, alpha):
 
     sx_list = get_spin_ops(N=N, axis='x')
     sz_list = get_spin_ops(N=N, axis='z')
@@ -35,17 +35,20 @@ def ising_hamiltonian(N, g, alpha=1.51):
     # Set the energy scale
     J = 1
 
+    # For equivalence to time crystal, Akitada would replace
+    # g by g = pi/2 * J/0.03 eps
+
     # construct the hamiltonian
     H = 0
 
     # magnetic field
     for n in range(N):
-        H += g * sx_list[n]
+        H -= g * sx_list[n]
 
     # interaction terms
     if alpha == np.inf:
         for i in range(N):
-            H += J * sz_list[i] * sz_list[i+1]
+            H += J * sz_list[i] * sz_list[(i+1) % N]
 
     else:
         for i in range(N):

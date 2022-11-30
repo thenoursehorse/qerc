@@ -8,7 +8,7 @@ import qutip as qt
 class PCAQubits:
     def __init__(self, N, filename, load=True):
         self.N = N
-        self.filename = filename + f'mnist_pca_N_{N}.h5'
+        self.filename = filename + f'qubit_mnist_N_{N}.h5'
 
         if load == True:
             if Path(self.filename).is_file():
@@ -25,80 +25,80 @@ class PCAQubits:
         if N == None:
             N = self.N
 
-        (self.train_x, self.train_y), (self.test_x, self.test_y) = mnist.load_data()
-        self.train_x = self.train_x.reshape(-1, 784).astype("float32")# / 255.
-        self.test_x = self.test_x.reshape(-1, 784).astype("float32")# / 255.
+        (self.x_train, self.y_train), (self.x_test, self.y_test) = mnist.load_data()
+        self.x_train = self.x_train.reshape(-1, 784).astype("float32")# / 255.
+        self.x_test = self.x_test.reshape(-1, 784).astype("float32")# / 255.
 
         # Standardize pixels and transform
         std_scalar = StandardScaler()
-        std_scalar.fit(self.train_x)
-        self.train_x_scalar = std_scalar.transform(self.train_x)
-        self.test_x_scalar = std_scalar.transform(self.test_x)
+        std_scalar.fit(self.x_train)
+        self.x_train_scalar = std_scalar.transform(self.x_train)
+        self.x_test_scalar = std_scalar.transform(self.x_test)
 
         # keep 2*N coponents (N is # of qubits)
         pca = PCA(2*N)
         #pca = PCA(.95) # keep N components so fit is 95% variance retained
 
         # Find pca representation
-        pca.fit(self.train_x_scalar)
-        self.train_pca = pca.transform(self.train_x_scalar)
-        self.test_pca = pca.transform(self.test_x_scalar)
+        pca.fit(self.x_train_scalar)
+        self.pca_train = pca.transform(self.x_train_scalar)
+        self.pca_test = pca.transform(self.x_test_scalar)
 
         # Select the appropriate components for each
-        self.train_theta = self.train_pca[:,:N]
-        self.train_phi = self.train_pca[:,N:2*N]
+        self.theta_train = self.pca_train[:,:N]
+        self.phi_train = self.pca_train[:,N:2*N]
         
-        self.test_theta = self.test_pca[:,:N]
-        self.test_phi = self.test_pca[:,N:2*N]
+        self.theta_test = self.pca_test[:,:N]
+        self.phi_test = self.pca_test[:,N:2*N]
 
         # Normalize to the range 0-pi
-        theta_min = np.min(self.train_theta)
-        theta_max = np.max(self.train_theta)
-        self.train_theta = np.pi * (self.train_theta - theta_min ) / (theta_max - theta_min)
-        self.test_theta = np.pi * (self.test_theta - theta_min ) / (theta_max - theta_min)
+        theta_min = np.min(self.theta_train)
+        theta_max = np.max(self.theta_train)
+        self.theta_train = np.pi * (self.theta_train - theta_min ) / (theta_max - theta_min)
+        self.theta_test = np.pi * (self.theta_test - theta_min ) / (theta_max - theta_min)
         
-        phi_min = np.min(self.train_phi)
-        phi_max = np.max(self.train_phi)
-        self.train_phi = np.pi * (self.train_phi - phi_min ) / (phi_max - phi_min)
-        self.test_phi = np.pi * (self.test_phi - phi_min ) / (phi_max - phi_min)
+        phi_min = np.min(self.phi_train)
+        phi_max = np.max(self.phi_train)
+        self.phi_train = np.pi * (self.phi_train - phi_min ) / (phi_max - phi_min)
+        self.phi_test = np.pi * (self.phi_test - phi_min ) / (phi_max - phi_min)
 
         # Truncate test data to make sure it fits in 0-pi range
-        idx_max = np.where(self.test_theta > np.pi)
-        idx_min = np.where(self.test_theta < 0)
-        self.test_theta[idx_max] = np.pi
-        self.test_theta[idx_min] = 0
+        idx_max = np.where(self.theta_test > np.pi)
+        idx_min = np.where(self.theta_test < 0)
+        self.theta_test[idx_max] = np.pi
+        self.theta_test[idx_min] = 0
         
-        idx_max = np.where(self.test_phi > np.pi)
-        idx_min = np.where(self.test_phi < 0)
-        self.test_phi[idx_max] = np.pi
-        self.test_phi[idx_min] = 0
+        idx_max = np.where(self.phi_test > np.pi)
+        idx_min = np.where(self.phi_test < 0)
+        self.phi_test[idx_max] = np.pi
+        self.phi_test[idx_min] = 0
 
     def save(self):
         
         with h5py.File(self.filename, 'w') as f:
-            f.create_dataset('train_theta', data=self.train_theta)
-            f.create_dataset('train_phi', data=self.train_phi)
-            f.create_dataset('train_y', data=self.train_y)
+            f.create_dataset('theta_train', data=self.theta_train)
+            f.create_dataset('phi_train', data=self.phi_train)
+            f.create_dataset('y_train', data=self.y_train)
             
-            f.create_dataset('test_theta', data=self.test_theta)
-            f.create_dataset('test_phi', data=self.test_phi)
-            f.create_dataset('test_y', data=self.test_y)
+            f.create_dataset('theta_test', data=self.theta_test)
+            f.create_dataset('phi_test', data=self.phi_test)
+            f.create_dataset('y_test', data=self.y_test)
 
     def load(self):
         
         with h5py.File(self.filename, 'r') as f:
-            self.train_theta = np.array( f['train_theta'] )
-            self.train_phi = np.array( f['train_phi'] )
-            self.train_y = np.array( f['train_y'] )
+            self.theta_train = np.array( f['theta_train'] )
+            self.phi_train = np.array( f['phi_train'] )
+            self.y_train = np.array( f['y_train'] )
             
-            self.test_theta = np.array( f['test_theta'] )
-            self.test_phi = np.array( f['test_phi'] )
-            self.test_y = np.array( f['test_y'] )
+            self.theta_test = np.array( f['theta_test'] )
+            self.phi_test = np.array( f['phi_test'] )
+            self.y_test = np.array( f['y_test'] )
 
     def encode_qubit(self,theta, phi):
         spin_up = qt.basis(2,0)
         spin_dn = qt.basis(2,1)
-        return np.cos(theta)*spin_up + np.exp(1j*phi)*np.sin(theta)*spin_dn
+        return np.cos(0.5*theta)*spin_up + np.exp(1j*phi)*np.sin(0.5*theta)*spin_dn
 
     def encode_psi(self, theta, phi):
         assert len(theta) == len(phi), f"len(theta) = len({theta}), len(phi) = len({phi}), have to be equal !"

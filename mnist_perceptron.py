@@ -18,7 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('-N_samples_train', type=float, default=60000)
     parser.add_argument('-N_samples_test', type=float, default=10000)
     parser.add_argument('-activation',
-        choices=['softmax', 'sigmoid', 'hyperbolic', 'cos', 'identity'],
+        choices=['softmax'],
         default='softmax',
     )
     parser.add_argument('-model',
