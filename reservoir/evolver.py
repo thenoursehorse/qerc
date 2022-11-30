@@ -140,7 +140,7 @@ class Evolver(object):
         start = timer()
         for k in range(N_samples_train):
             # Encode the digits on psi
-            psi0 = input_data.encode_psi(theta=input_data.train_theta[k], phi=input_data.train_phi[k])
+            psi0 = input_data.encode_psi(k=k, test=False)
 
             result = self.evolve_single(psi0)
 
@@ -159,7 +159,7 @@ class Evolver(object):
         start = timer()
         for k in range(N_samples_test):
             # Encode the digits on psi
-            psi0 = input_data.encode_psi(theta=input_data.test_theta[k], phi=input_data.test_phi[k])
+            psi0 = input_data.encode_psi(k=k, test=True)
 
             result = self.evolve_single(psi0)
 

@@ -100,7 +100,12 @@ class PCAQubits:
         spin_dn = qt.basis(2,1)
         return np.cos(0.5*theta)*spin_up + np.exp(1j*phi)*np.sin(0.5*theta)*spin_dn
 
-    def encode_psi(self, theta, phi):
-        assert len(theta) == len(phi), f"len(theta) = len({theta}), len(phi) = len({phi}), have to be equal !"
+    def encode_psi(self, k, test=False):
+        if test:
+            theta = self.theta_test[k]
+            phi = self.phi_test[k]
+        else:
+            theta = self.theta_train[k]
+            phi = self.phi_train[k]
         qubits = [self.encode_qubit(theta[i], phi[i]) for i in range(len(theta))]
         return qt.tensor(*qubits)
