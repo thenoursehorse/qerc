@@ -23,10 +23,9 @@ export hsize_final=4000
 export hsize_step=500
 
 encode() {
-  alpha=$1
-  N=$2
+  N=$1
   
-  outfile=encode_N_${N}_alpha_${alpha}.out
+  outfile=encode_N_${N}.out
   
   python3 -u ${exec_folder}/mnist_encode.py -N ${N} \
 	  -filename_root ${filename_root} \
@@ -123,7 +122,7 @@ perceptron() {
 export -f perceptron
 
 # Run in parallel (indexed as alpha, N, g) using GNU parallel
-parallel -j${njobs} --memsuspend 2G encode ::: "${alpha_arr[@]}" ::: "${N_arr[@]}"
+parallel -j${njobs} --memsuspend 2G encode ::: "${N_arr[@]}"
 
 parallel -j${njobs} --memsuspend 2G evolve ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
 
