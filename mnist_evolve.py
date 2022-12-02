@@ -13,12 +13,12 @@ if __name__ == '__main__':
     parser.add_argument('-g', type=float, required=True)
     parser.add_argument('-filename_root', required=True)
     parser.add_argument('-alpha', type=float, default=1.51)
-    parser.add_argument('-dt', type=float, default=10)
-    parser.add_argument('-tf', type=float, default=50)
-    parser.add_argument('-N_samples_train', type=float, default=60000)
-    parser.add_argument('-N_samples_test', type=float, default=10000)
+    parser.add_argument('-dt', type=float, default=0.5)
+    parser.add_argument('-tf', type=float, default=5)
+    parser.add_argument('-N_samples_train', type=int, default=60000)
+    parser.add_argument('-N_samples_test', type=int, default=10000)
     parser.add_argument('-solver',
-        choices=['mc', 'expm', 'expm_diag'],
+        choices=['expm'],
         default='expm',
     )
     parser.add_argument('-model',
@@ -52,6 +52,6 @@ if __name__ == '__main__':
                       N_samples_train=args.N_samples_train, 
                       N_samples_test=args.N_samples_test,
                       save=args.save)
-    evolver.evolve_all(input_data=input_data)
+    evolver.evolve_all(psi0_train=input_data.psi0_train, psi0_test=input_data.psi0_test)
     
     print("Finished.")

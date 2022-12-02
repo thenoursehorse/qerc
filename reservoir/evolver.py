@@ -1,4 +1,5 @@
 import numpy as np
+import scipy
 import h5py
 from timeit import default_timer as timer
 
@@ -17,28 +18,55 @@ def _evolve_state(H, psi0, tlist, e_ops=None):
     return qt.mcsolve(H=H, psi0=psi0, tlist=tlist, options=options)
     #return qt.mcsolve(H=H, psi0=psi0, tlist=tlist, e_ops=e_ops, options=options)
 
-def _evolve_state_expm(U, psi0, tlist): 
-    output = qt.solver.Result()
-    output.solver = 'expm'
-    output.times = tlist
-    states = [None for i in range(len(tlist))]
+def _evolve_state_expm(U, psi0, tlist):
+    result = qt.solver.Result()
+    result.solver = 'expm'
+    result.times = tlist
+    states = [qt.Qobj(shape=psi0.shape, dims=psi0.dims) for i in range(len(tlist))]
     states[0] = copy.deepcopy(psi0)
     for i in range(1, len(tlist)):
         states[i] = U * states[i-1]
-    output.states = states
-    return output
+        #states[i] = qt.Qobj(U.data @ states[i-1].data, dims=states[i-1].dims)
+    result.states = states
+    return result
+
+def _evolve_state_expm_full(U, psi0, tlist):
+    U_full = U.full()
+    result = qt.solver.Result()
+    result.solver = 'expm'
+    result.times = tlist
+    states = np.empty(shape=(len(tlist), psi0.shape[0], psi0.shape[1]), dtype=psi0.dtype)
+    states[0,...] = copy.deepcopy(psi0)
+    for i in range(1, len(tlist)):
+        states[i,...] = U_full @ states[i-1,...]
+    result.states = states
+    return result
 
 def _evolve_state_expm_diag(U_diag, P, psi0, tlist): 
-    output = qt.solver.Result()
-    output.solver = 'expm_diag'
-    output.times = tlist
-    states = [None for i in range(len(tlist))]
+    result = qt.solver.Result()
+    result.solver = 'expm_diag'
+    result.times = tlist
+    states = [qt.Qobj(shape=psi0.shape, dims=psi0.dims) for i in range(len(tlist))]
     states[0] = copy.deepcopy(psi0)
     for i in range(1, len(tlist)):
         # P^+ P expH P^+ P psi0 = P^+ U_diag P psi0
-        states[i] = P.dag() * U_diag * P * states[i-1]
-    output.states = states
-    return output
+        states[i] = P.dag().data * U_diag * P * states[i-1]
+    result.states = states
+    return result
+
+def _evolve_state_expm_diag_full(U_diag, P, psi0, tlist):
+    U_diag_full = U_diag.full()
+    P_full = P.full()
+    result = qt.solver.Result()
+    result.solver = 'expm_diag'
+    result.times = tlist
+    states = np.empty(shape=(len(tlist), psi0.shape[0], psi0.shape[1]), dtype=psi0.dtype)
+    states[0,...] = copy.deepcopy(psi0)
+    for i in range(1, len(tlist)):
+        # P^+ P expH P^+ P psi0 = P^+ U_diag P psi0
+        states[i,...] = P_full.conj().T @ U_diag_full @ P_full @ states[i-1,...]
+    result.states = states
+    return result
 
 def _get_U(H, dt):
     ln_U = -1j*H*dt
@@ -118,8 +146,51 @@ class Evolver(object):
             qt.qsave(self._H, self._filename+f"_hamiltonian.qu")
             qt.qsave(self._eigs, self._filename+"_eigs.qu")
             qt.qsave(self._vecs, self._filename+"_vecs.qu")
-    
+        
     def evolve_single(self, psi0):
+        if self._solver == "expm":
+            result = _evolve_state_expm_full(U=self._U, psi0=psi0, tlist=self._tlist)
+        elif self._solver == "expm_diag":
+            result = _evolve_state_expm_diag_full(U_diag=self._U_diag, P=self._P, psi0=psi0, tlist=self._tlist)
+        else:
+            raise ValueError(f'unrecognized solver {self._solver}')
+        return result
+    
+    def evolve_all(self, psi0_train, psi0_test):
+        assert (self._solver == "expm") or (self._solver == "expm_diag"), "Use evolve_all_old for other solvers !"
+        
+        dims = [ self._H.dims[0], [1 for _ in range(len(self._H.dims[0]))] ]
+        shape = (self._H.shape[0], 1)
+        
+        print("Training:")
+        print("Evolving all samples:")
+        start = timer()
+        result = self.evolve_single(psi0=psi0_train)
+        end = timer()
+        print("Duration:", end-start)
+        print()
+        if self._save:
+            result.dims = dims
+            result.shape = shape
+            # evolver indexed as times, basis state, sample, so swap last two indices for observer
+            result.states = np.transpose(result.states, (0,2,1))
+            qt.qsave(result, self._filename+"_train.qu")
+        
+        print("Testing:")
+        print("Evolving all samples:")
+        start = timer()
+        result = self.evolve_single(psi0=psi0_test)
+        end = timer()
+        print(f"Duration:", end-start)
+        print()
+        if self._save:
+            result.dims = dims
+            result.shape = shape
+            # evolver indexed as times, basis state, sample, so swap last two indices for observer
+            result.states = np.transpose(result.states, (0,2,1))
+            qt.qsave(result, self._filename+"_test.qu")
+    
+    def evolve_single_old(self, psi0):
         if self._solver == "mc":
             result = _evolve_state(H=self._H, psi0=psi0, tlist=self._tlist)
         elif self._solver == "expm":
@@ -130,7 +201,7 @@ class Evolver(object):
             raise ValueError(f'unrecognized solver {self._solver}')
         return result
     
-    def evolve_all(self, input_data, N_samples_train=None, N_samples_test=None):
+    def evolve_all_old(self, input_data, N_samples_train=None, N_samples_test=None):
         if N_samples_train == None:
             N_samples_train = self._N_samples_train
         if N_samples_test == None:
@@ -142,7 +213,7 @@ class Evolver(object):
             # Encode the digits on psi
             psi0 = input_data.encode_psi(k=k, test=False)
 
-            result = self.evolve_single(psi0)
+            result = self.evolve_single_old(psi0)
 
             if self._save:
                 qt.qsave(result, self._filename+f"_train_k_{k}.qu")
@@ -161,7 +232,7 @@ class Evolver(object):
             # Encode the digits on psi
             psi0 = input_data.encode_psi(k=k, test=True)
 
-            result = self.evolve_single(psi0)
+            result = self.evolve_single_old(psi0)
 
             if self._save:
                 qt.qsave(result, self._filename+f"_test_k_{k}.qu")
@@ -173,6 +244,10 @@ class Evolver(object):
         end = timer()
         print(f"sample {k}/{N_samples_test} took:", end-start)
         print()
+    
+    def save(self, filename, result):
+        with h5py.File(filename, 'w') as f:
+            f.create_dataset('result', data=result)
         
     @property
     def N(self):

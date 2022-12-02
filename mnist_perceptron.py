@@ -152,7 +152,7 @@ if __name__ == '__main__':
             x_train, x_test = perceptron.standardize(x_train, x_test)
 
         # Make the one hot vectors
-        y_train, y_test = perceptron.onehot_y(y_train=input_data.train_y, y_test=input_data.test_y)
+        y_train, y_test = perceptron.onehot_y(y_train=input_data.y_train, y_test=input_data.y_test)
          
         # Train the perceptron and take some obvservations
         start = timer()

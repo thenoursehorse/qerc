@@ -42,15 +42,20 @@ class Observer:
                        N_samples_train=None, 
                        N_samples_test=None,
                        save=True,
-                       load=False):
+                       load=False,
+                       observe_list=["psi","x","xx","z","zz","ee","es"]):
         self._N = N
         self._filename = filename
+        self._filename_train = self._filename+"_train"
+        self._filename_test = self._filename+"_test"
         
         self._N_samples_train = N_samples_train
         self._N_samples_test = N_samples_test
         
         self._save = save
         self._load = load
+
+        self._observe_list = observe_list
 
         self._result = None
         self._Nt = None
@@ -60,24 +65,111 @@ class Observer:
 
         self._corr_size = int( (self._N*self._N - self._N)/2 )
         if not self._load:
-            self._x_ops = get_spin_ops(N=self._N, axis='x')
-            self._z_ops = get_spin_ops(N=self._N, axis='z')
-            self._xx_ops = [self._x_ops[i] * self._x_ops[j] for i in range(self._N) for j in range(self._N) if i > j]
-            self._zz_ops = [self._z_ops[i] * self._z_ops[j] for i in range(self._N) for j in range(self._N) if i > j]
+            if "x" in self._observe_list:
+                self._x_ops = get_spin_ops(N=self._N, axis='x')
+            if "z" in self._observe_list:
+                self._z_ops = get_spin_ops(N=self._N, axis='z')
+            if "xx" in self._observe_list:
+                self._xx_ops = [self._x_ops[i] * self._x_ops[j] for i in range(self._N) for j in range(self._N) if i > j]
+            if "zz" in self._observe_list:
+                self._zz_ops = [self._z_ops[i] * self._z_ops[j] for i in range(self._N) for j in range(self._N) if i > j]
  
     def initialize(self, N_samples):
-        self._x = np.empty(shape=(self._Nt, N_samples, self._N))
-        self._z = np.empty(shape=(self._Nt, N_samples, self._N))
-        self._xx = np.empty(shape=(self._Nt, N_samples, self._corr_size))
-        self._zz = np.empty(shape=(self._Nt, N_samples, self._corr_size))
-        self._ee = np.empty(shape=(self._Nt, N_samples))
-        self._es = np.empty(shape=(self._Nt, N_samples, 2**int(self._N/2)))
-        self._psi = np.empty(shape=(self._Nt, N_samples, 2**self._N), dtype=complex)
+        if "x" in self._observe_list:
+            self._x = np.empty(shape=(self._Nt, N_samples, self._N))
+        if "z" in self._observe_list:
+            self._z = np.empty(shape=(self._Nt, N_samples, self._N))
+        if "xx" in self._observe_list:
+            self._xx = np.empty(shape=(self._Nt, N_samples, self._corr_size))
+        if "zz" in self._observe_list:
+            self._zz = np.empty(shape=(self._Nt, N_samples, self._corr_size))
+        if "ee" in self._observe_list:
+            self._ee = np.empty(shape=(self._Nt, N_samples))
+        if "es" in self._observe_list:
+            self._es = np.empty(shape=(self._Nt, N_samples, 2**int(self._N/2)))
+        if "psi" in self._observe_list:
+            self._psi = np.empty(shape=(self._Nt, N_samples, 2**self._N), dtype=complex)
 
     def time_to_idx(self, time):
         return np.where( np.abs(self._tlist - time) < 1e-10)[0][0]
+    
+    def _to_Qobj(self, result, k):
+        states = result.states[:,k,:]
+        dims = result.dims
+        shape = result.shape
+        Nt = len(states)
+        return [qt.Qobj(result.states[t,k,:], dims=dims, shape=shape) for t in range(Nt)]
+    
+    def observe_one(self, result, k):
+        # Make into Qobj to take observations
+        psi_list = self._to_Qobj(result=result, k=k)
+
+        # qt.expect returns indexed as obs, time, hence transpose
+        if "x" in self._observe_list:
+            self._x[:,k,:] = np.array(qt.expect(oper=self._x_ops, state=psi_list)).T
+        if "z" in self._observe_list:
+            self._z[:,k,:] = np.array(qt.expect(oper=self._z_ops, state=psi_list)).T
+        if "xx" in self._observe_list:
+            self._xx[:,k,:] = np.array(qt.expect(oper=self._xx_ops, state=psi_list)).T
+        if "zz" in self._observe_list:
+            self._zz[:,k,:] = np.array(qt.expect(oper=self._zz_ops, state=psi_list)).T
+            
+        if ("ee" in self._observe_list) or ("es" in self._observe_list):
+            for n in range(len(psi_list)):
+                psi = psi_list[n]
+                self._es[n,k,:], self._ee[n,k] = _entropy(self._N, psi)
+
+    def observe_all(self):
+        N_samples_train = self._N_samples_train
+        N_samples_test = self._N_samples_test
         
-    def observe_one(self, psi_list, k):
+        print("Observing all training samples:")
+        self._result = self.load_qu(filename=self._filename_train)
+        self.initialize(N_samples=N_samples_train)
+        
+        if "psi" in self._observe_list:
+            self._psi[...] = self._result.states[...]
+        
+        if ("x" or "xx" or "z" or "zz" or "ee" or "es") in self._observe_list:
+            # Take observations
+            start = timer()
+            for k in range(N_samples_train):
+                self.observe_one(result=self._result, k=k)
+                
+                if ((k%(1000)) == 0) and (k != 0):
+                    end = timer()
+                    print(f"sample {k}/{N_samples_train} took:", end-start)
+                    start = timer()
+            end = timer()
+            print(f"sample {k}/{N_samples_train} took:", end-start)
+            print()
+            if self._save:
+                self.save_h5(filename=self._filename_train)
+            
+            print("Observing all testing samples:")
+            self._result = self.load_qu(filename=self._filename_test)
+            self.initialize(N_samples=N_samples_test)
+            
+            if "psi" in self._observe_list:
+                self._psi[...] = self._result.states[...]
+            
+        if ("x" or "xx" or "z" or "zz" or "ee" or "es") in self._observe_list:
+            # Take observations
+            start = timer()
+            for k in range(N_samples_test):
+                self.observe_one(result=self._result, k=k)
+                
+                if ((k%(1000)) == 0) and (k != 0):
+                    end = timer()
+                    print(f"sample {k}/{N_samples_test} took:", end-start)
+                    start = timer()
+            end = timer()
+            print(f"sample {k}/{N_samples_test} took:", end-start)
+            print()
+            if self._save:
+                self.save_h5(filename=self._filename_test)
+
+    def observe_one_old(self, psi_list, k):
         assert isinstance(psi_list, list), "psi must be a list of Qobj !"
 
         # qt.expect returns indexed as obs, time, hence transpose
@@ -104,7 +196,7 @@ class Observer:
             # All coefficients in the computational basis
             self._psi[n,k,:] = psi.full()[:,0]
 
-    def observe_all(self):
+    def observe_all_old(self):
         N_samples_train = self._N_samples_train
         N_samples_test = self._N_samples_test
         
@@ -119,7 +211,7 @@ class Observer:
         start = timer()
         for k in range(N_samples_train):
             self._result = self.load_qu(filename=filename, k=k)
-            self.observe_one(psi_list=self._result.states, k=k)
+            self.observe_one_old(psi_list=self._result.states, k=k)
             
             if ((k%(1000)) == 0) and (k != 0):
                 end = timer()
@@ -142,7 +234,7 @@ class Observer:
         start = timer()
         for k in range(N_samples_test):
             self._result = self.load_qu(filename=filename, k=k)
-            self.observe_one(psi_list=self._result.states, k=k)
+            self.observe_one_old(psi_list=self._result.states, k=k)
             
             if ((k%(1000)) == 0) and (k != 0):
                 end = timer()
@@ -154,19 +246,33 @@ class Observer:
         if self._save:
             self.save_h5(filename=filename)
 
-    def load_qu(self, filename, k):
-        filename = filename+f"_k_{k}.qu"
+    def load_qu(self, filename, k=None):
+        if k != None:
+            filename = filename+f"_k_{k}.qu"
+        else:
+            filename = filename+".qu"
         self._result = qt.qload(filename)
         self._tlist = self._result.times
         self._Nt = len(self._tlist)
         return self._result
 
-    def delete_qu(self, filename, k):
-        filename = filename+f"_k_{k}.qu"
+    def delete_qu(self, filename, k=None):
+        if k != None:
+            filename = filename+f"_k_{k}.qu"
+        else:
+            filename = filename+".qu"
         file_to_rem = Path(filename)
         file_to_rem.unlink(missing_ok=True)
 
     def delete_qu_all(self):
+        
+        print("Deleting all wavefunction training samples:")
+        self.delete_qu(filename=self._filename_train)
+        
+        print("Deleting all wavefunction testing samples:")
+        self.delete_qu(filename=self._filename_test)
+
+    def delete_qu_all_old(self):
         N_samples_train = self._N_samples_train
         N_samples_test = self._N_samples_test
         
@@ -184,7 +290,7 @@ class Observer:
         print(f"sample {k}/{N_samples_train} took:", end-start)
         print()
         
-        print("Deleting all wavefunction testinging samples:")
+        print("Deleting all wavefunction testing samples:")
         filename = self._filename+'_test'
         start = timer()
         for k in range(N_samples_test):
@@ -205,15 +311,22 @@ class Observer:
             f.create_dataset('N', data=self._N)
             f.create_dataset('tlist', data=self._tlist)
             
-            f.create_dataset(f'x', data=self._x)
-            f.create_dataset(f'z', data=self._z)
-            f.create_dataset(f'xx', data=self._xx)
-            f.create_dataset(f'zz', data=self._zz)
+            if "x" in self._observe_list:
+                f.create_dataset(f'x', data=self._x)
+            if "z" in self._observe_list:
+                f.create_dataset(f'z', data=self._z)
+            if "xx" in self._observe_list:
+                f.create_dataset(f'xx', data=self._xx)
+            if "zz" in self._observe_list:
+                f.create_dataset(f'zz', data=self._zz)
             
-            f.create_dataset(f'ee', data=self._ee)
-            f.create_dataset(f'es', data=self._es)
+            if "ee" in self._observe_list:
+                f.create_dataset(f'ee', data=self._ee)
+            if "es" in self._observe_list:
+                f.create_dataset(f'es', data=self._es)
             
-            f.create_dataset(f'psi', data=self._psi)
+            if "psi" in self._observe_list:
+                f.create_dataset(f'psi', data=self._psi)
 
     def load_h5(self, filename):
         filename = filename+".h5"
@@ -222,15 +335,22 @@ class Observer:
             self._N = np.array(f['N'])
             self._tlist = np.array( f[f'tlist'] )
             
-            self._x = np.array( f[f'x'] )
-            self._z = np.array( f[f'z'] )
-            self._xx = np.array( f[f'xx'] )
-            self._zz = np.array( f[f'zz'] )
+            if "x" in self._observe_list:
+                self._x = np.array( f[f'x'] )
+            if "z" in self._observe_list:
+                self._z = np.array( f[f'z'] )
+            if "xx" in self._observe_list:
+                self._xx = np.array( f[f'xx'] )
+            if "zz" in self._observe_list:
+                self._zz = np.array( f[f'zz'] )
             
-            self._ee = np.array( f[f'ee'] )
-            self._es = np.array( f[f'es'] )
+            if "ee" in self._observe_list:
+                self._ee = np.array( f[f'ee'] )
+            if "es" in self._observe_list:
+                self._es = np.array( f[f'es'] )
             
-            self._psi = np.array( f[f'psi'] )
+            if "psi" in self._observe_list:
+                self._psi = np.array( f[f'psi'] )
     
     @property
     def N(self):
@@ -242,6 +362,7 @@ class Observer:
 
     @property
     def rho_diag(self):
+        assert "psi" in self._observe_list, "psi must be loaded in class to calculate rho_diag !"
         return (self._psi.conj() * self._psi).real
     
     @property

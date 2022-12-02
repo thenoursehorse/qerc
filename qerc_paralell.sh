@@ -7,8 +7,8 @@ g_arr=$(seq 0 0.5 5)
 alpha_arr=(1.51 10000)
 
 # for N=10 can use about 3.5% of memory on this workstation
-#njobs=25
-njobs=32
+njobs=20
+#njobs=32
 
 source $HOME/venv/qutip_qist/bin/activate
 
@@ -22,7 +22,18 @@ export hsize_initial=500
 export hsize_final=4000
 export hsize_step=500
 
-# Reservoir
+encode() {
+  alpha=$1
+  N=$2
+  
+  outfile=encode_N_${N}_alpha_${alpha}.out
+  
+  python3 -u ${exec_folder}/mnist_encode.py -N ${N} \
+	  -filename_root ${filename_root} \
+	  &> ${outfile}
+}
+export -f encode
+
 evolve() {
   alpha=$1
   N=$2
@@ -40,7 +51,6 @@ evolve() {
 }
 export -f evolve
 
-# Different kinds of elm
 elm() {  
   alpha=$1
   N=$2
@@ -102,7 +112,7 @@ perceptron() {
           -filename_root ${filename_root} -model ${model} -node_type 'rho_diag' \
           &> ${outfile}
 
-  python3 -u ${exec_folder}/mnist_perceptron.py -N ${N} -g ${g} -alpha ${alpha} \ 
+  python3 -u ${exec_folder}/mnist_perceptron.py -N ${N} -g ${g} -alpha ${alpha} \
           -filename_root ${filename_root} -model ${model} -node_type 'psi' \
           &>> ${outfile}
 
@@ -113,10 +123,12 @@ perceptron() {
 export -f perceptron
 
 # Run in parallel (indexed as alpha, N, g) using GNU parallel
-parallel -j${njobs} evolve ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
+parallel -j${njobs} --memsuspend 2G encode ::: "${alpha_arr[@]}" ::: "${N_arr[@]}"
 
-parallel -j${njobs} identity ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
+parallel -j${njobs} --memsuspend 2G evolve ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
 
-parallel -j${njobs} perceptron ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
+parallel -j${njobs} --memsuspend 2G perceptron ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
 
-parallel -j${njobs} elm ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
+parallel -j${njobs} --memsuspend 2G identity ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
+
+parallel -j${njobs} --memsuspend 2G elm ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"

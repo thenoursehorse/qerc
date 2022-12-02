@@ -5,17 +5,31 @@ from pathlib import Path
 
 import qutip as qt
 
-class PCAQubits:
-    def __init__(self, N, filename, load=True):
-        self.N = N
-        self.filename = filename + f'qubit_mnist_N_{N}.h5'
+from .encoder import Encoder
+
+class PCAQubits(Encoder):
+    def __init__(self, load=True, **kwargs):
+        super().__init__(**kwargs)
+        self.filename_pca = self.filename + f'qubit_pca_mnist_N_{self.N}.h5'
+        self.filename_psi0 = self.filename + f'qubit_psi0_mnist_N_{self.N}.h5'
 
         if load == True:
-            if Path(self.filename).is_file():
-                self.load()
+            if Path(self.filename_pca).is_file():
+                self.load_pca()
             else:
                 self.get_pca()
-                self.save()
+                if self.save:
+                    self.save_pca()
+            
+            if Path(self.filename_psi0).is_file():
+                self.load_psi0()
+            else:
+                print("Training:")
+                self._psi0_train = self.get_psi0(N_samples=self.theta_train.shape[0], test=False)
+                print("Testing:")
+                self._psi0_test = self.get_psi0(N_samples=self.theta_test.shape[0], test=True)
+                if self.save:
+                    self.save_psi0()
 
     def get_pca(self, N=None):
         from keras.datasets import mnist
@@ -73,9 +87,8 @@ class PCAQubits:
         self.phi_test[idx_max] = np.pi
         self.phi_test[idx_min] = 0
 
-    def save(self):
-        
-        with h5py.File(self.filename, 'w') as f:
+    def save_pca(self):
+        with h5py.File(self.filename_pca, 'w') as f:
             f.create_dataset('theta_train', data=self.theta_train)
             f.create_dataset('phi_train', data=self.phi_train)
             f.create_dataset('y_train', data=self.y_train)
@@ -84,9 +97,8 @@ class PCAQubits:
             f.create_dataset('phi_test', data=self.phi_test)
             f.create_dataset('y_test', data=self.y_test)
 
-    def load(self):
-        
-        with h5py.File(self.filename, 'r') as f:
+    def load_pca(self):
+        with h5py.File(self.filename_pca, 'r') as f:
             self.theta_train = np.array( f['theta_train'] )
             self.phi_train = np.array( f['phi_train'] )
             self.y_train = np.array( f['y_train'] )
