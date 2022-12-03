@@ -65,16 +65,24 @@ class PCAQubits(Encoder):
         self.theta_test = self.pca_test[:,:N]
         self.phi_test = self.pca_test[:,N:2*N]
 
+        # FIXME surely it is this instead to preserve the correct information
+        pca_min = np.min(self.pca_train)
+        pca_max = np.max(self.pca_train)
+        self.theta_train = np.pi * (self.theta_train - pca_min ) / (pca_max - pca_min)
+        self.theta_test = np.pi * (self.theta_test - pca_min ) / (pca_max - pca_min)
+        self.phi_train = np.pi * (self.phi_train - pca_min ) / (pca_max - pca_min)
+        self.phi_test = np.pi * (self.phi_test - pca_min ) / (pca_max - pca_min)
+
         # Normalize to the range 0-pi
-        theta_min = np.min(self.theta_train)
-        theta_max = np.max(self.theta_train)
-        self.theta_train = np.pi * (self.theta_train - theta_min ) / (theta_max - theta_min)
-        self.theta_test = np.pi * (self.theta_test - theta_min ) / (theta_max - theta_min)
+        #theta_min = np.min(self.theta_train)
+        #theta_max = np.max(self.theta_train)
+        #self.theta_train = np.pi * (self.theta_train - theta_min ) / (theta_max - theta_min)
+        #self.theta_test = np.pi * (self.theta_test - theta_min ) / (theta_max - theta_min)
         
-        phi_min = np.min(self.phi_train)
-        phi_max = np.max(self.phi_train)
-        self.phi_train = np.pi * (self.phi_train - phi_min ) / (phi_max - phi_min)
-        self.phi_test = np.pi * (self.phi_test - phi_min ) / (phi_max - phi_min)
+        #phi_min = np.min(self.phi_train)
+        #phi_max = np.max(self.phi_train)
+        #self.phi_train = np.pi * (self.phi_train - phi_min ) / (phi_max - phi_min)
+        #self.phi_test = np.pi * (self.phi_test - phi_min ) / (phi_max - phi_min)
 
         # Truncate test data to make sure it fits in 0-pi range
         idx_max = np.where(self.theta_test > np.pi)

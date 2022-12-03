@@ -69,10 +69,10 @@ elm() {
 	  &>> ${outfile}
 
     
-  python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
-	  -hsize_initial ${hsize_initial} -hsize_final ${hsize_final} -hsize_step ${hsize_step} \
-	  -filename_root ${filename_root} -model ${model} -node_type 'corr' \
-	  &>> ${outfile}
+  #python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
+  #        -hsize_initial ${hsize_initial} -hsize_final ${hsize_final} -hsize_step ${hsize_step} \
+  #        -filename_root ${filename_root} -model ${model} -node_type 'corr' \
+  #        &>> ${outfile}
 }
 export -f elm
 
@@ -93,10 +93,10 @@ identity() {
 	  -filename_root ${filename_root} -model ${model} -node_type 'psi' \
 	  &>> ${outfile}
   
-  python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
-          -activation 'identity' -standardize 'True' -pinv 'numpy' \
-	  -filename_root ${filename_root} -model ${model} -node_type 'corr' \
-	  &>> ${outfile}
+  #python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
+  #        -activation 'identity' -standardize 'True' -pinv 'numpy' \
+  #        -filename_root ${filename_root} -model ${model} -node_type 'corr' \
+  #        &>> ${outfile}
 }
 export -f identity
 
@@ -115,9 +115,9 @@ perceptron() {
           -filename_root ${filename_root} -model ${model} -node_type 'psi' \
           &>> ${outfile}
 
-  python3 -u ${exec_folder}/mnist_perceptron.py -N ${N} -g ${g} -alpha ${alpha} \
-          -filename_root ${filename_root} -model ${model} -node_type 'corr' \
-          &>> ${outfile}
+  #python3 -u ${exec_folder}/mnist_perceptron.py -N ${N} -g ${g} -alpha ${alpha} \
+  #        -filename_root ${filename_root} -model ${model} -node_type 'corr' \
+  #        &>> ${outfile}
 }
 export -f perceptron
 

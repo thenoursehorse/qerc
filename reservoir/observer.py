@@ -43,7 +43,8 @@ class Observer:
                        N_samples_test=None,
                        save=True,
                        load=False,
-                       observe_list=["psi","x","xx","z","zz","ee","es"]):
+                       observe_list=["psi"]):
+                       #observe_list=["psi","x","xx","z","zz","ee","es"]):
         self._N = N
         self._filename = filename
         self._filename_train = self._filename+"_train"
