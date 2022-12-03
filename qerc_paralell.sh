@@ -4,10 +4,12 @@ N_arr=$(seq 5 11)
 #g_arr=$(seq 0.90 0.01 1.1)
 #g_arr=$(seq 0 0.1 2)
 g_arr=$(seq 0 0.5 5)
-alpha_arr=(1.51 10000)
+#alpha_arr=(1.51 10000)
+alpha_arr=(1.51)
 
 # for N=10 can use about 3.5% of memory on this workstation
-njobs=20
+njobs=10
+#njobs=20
 #njobs=32
 
 source $HOME/venv/qutip_qist/bin/activate

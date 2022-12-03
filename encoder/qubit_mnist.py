@@ -32,16 +32,23 @@ class PCAQubits(Encoder):
                     self.save_psi0()
 
     def get_pca(self, N=None):
-        from keras.datasets import mnist
+        #from keras.datasets import mnist
+        from sklearn.datasets import fetch_openml
+        from sklearn.model_selection import train_test_split
         from sklearn.preprocessing import StandardScaler
         from sklearn.decomposition import PCA
         
         if N == None:
             N = self.N
 
-        (self.x_train, self.y_train), (self.x_test, self.y_test) = mnist.load_data()
-        self.x_train = self.x_train.reshape(-1, 784).astype("float32")# / 255.
-        self.x_test = self.x_test.reshape(-1, 784).astype("float32")# / 255.
+        #(self.x_train, self.y_train), (self.x_test, self.y_test) = mnist.load_data()
+        #self.x_train = self.x_train.reshape(-1, 784).astype("float32") / 255.0
+        #self.x_test = self.x_test.reshape(-1, 784).astype("float32") / 255.0
+
+        mnist = fetch_openml('mnist_784', as_frame=False)
+        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(mnist.data, mnist.target, test_size=1/7.0, random_state=0)
+        self.y_train = self.y_train.astype(int)
+        self.y_test = self.y_test.astype(int)
 
         # Standardize pixels and transform
         std_scalar = StandardScaler()
@@ -65,9 +72,9 @@ class PCAQubits(Encoder):
         self.theta_test = self.pca_test[:,:N]
         self.phi_test = self.pca_test[:,N:2*N]
 
-        # FIXME surely it is this instead to preserve the correct information
+        # Normalize to the range 0-pi
         pca_min = np.min(self.pca_train)
-        pca_max = np.max(self.pca_train)
+        pca_max = np.max(self.pca_test)
         self.theta_train = np.pi * (self.theta_train - pca_min ) / (pca_max - pca_min)
         self.theta_test = np.pi * (self.theta_test - pca_min ) / (pca_max - pca_min)
         self.phi_train = np.pi * (self.phi_train - pca_min ) / (pca_max - pca_min)
