@@ -144,15 +144,16 @@ class Observer:
             end = timer()
             print(f"sample {k}/{N_samples_train} took:", end-start)
             print()
-            if self._save:
-                self.save_h5(filename=self._filename_train)
+        
+        if self._save:
+            self.save_h5(filename=self._filename_train)
             
-            print("Observing all testing samples:")
-            self._result = self.load_qu(filename=self._filename_test)
-            self.initialize(N_samples=N_samples_test)
+        print("Observing all testing samples:")
+        self._result = self.load_qu(filename=self._filename_test)
+        self.initialize(N_samples=N_samples_test)
             
-            if "psi" in self._observe_list:
-                self._psi[...] = self._result.states[...]
+        if "psi" in self._observe_list:
+           self._psi[...] = self._result.states[...]
             
         if ("x" or "xx" or "z" or "zz" or "ee" or "es") in self._observe_list:
             # Take observations
@@ -167,8 +168,9 @@ class Observer:
             end = timer()
             print(f"sample {k}/{N_samples_test} took:", end-start)
             print()
-            if self._save:
-                self.save_h5(filename=self._filename_test)
+        
+        if self._save:
+            self.save_h5(filename=self._filename_test)
 
     def observe_one_old(self, psi_list, k):
         assert isinstance(psi_list, list), "psi must be a list of Qobj !"
