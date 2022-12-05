@@ -3,7 +3,7 @@ from copy import deepcopy
 from .nn import NeuralNetwork
         
 class Perceptron(NeuralNetwork):
-    def __init__(self, output_size, N_epochs=100, M=32, eta=1.0, gamma=0.9, rho=0.99, eps=1e-6, observe=True, **kwargs):
+    def __init__(self, output_size, N_epochs=100, M=32, eta=1.0, gamma=0.9, rho=0.99, eps=1e-6, shuffle=True, **kwargs):
         self._output_size = output_size
         self._N_epochs = N_epochs
         # Minibatch number. M = 1 is stochastic gradient descent (SGD), M = -1 batch gradient descent (BGD)
@@ -12,7 +12,7 @@ class Perceptron(NeuralNetwork):
         self._gamma = gamma
         self._rho = rho
         self._eps = eps
-        self._observe = observe
+        self._shuffle = shuffle
         super().__init__(**kwargs)
 
         assert (self._activation == 'softmax'), 'Can only use softmax activation function for perceptron !'
@@ -23,24 +23,28 @@ class Perceptron(NeuralNetwork):
             print("For momentum: rho = 0")
 
         # Initialize weights to zero
-        self._weight = np.zeros(shape=(self._output_size, self._input_size))
+        #self._weight = np.zeros(shape=(self._output_size, self._input_size))
+        #self._bias = np.zeros(shape=(self._output_size))
+        
+        # Randomize weights using He initialization
+        rng = np.random.default_rng()
+        self._rand = rng.normal
+        self._weight = self._rand(0, 1, (self._output_size, self._input_size)) * np.sqrt(2.0/(self._output_size -1))
         self._bias = np.zeros(shape=(self._output_size))
         
-        # Randomize weights
-        #rng = np.random.default_rng()
         #self._rand = rng.uniform
         #self._weight = self._rand(-1, 1, (self._output_size, self._input_size))
         #self._bias = self._rand(-1, 1, (self._output_size))
 
         # To hold data
-        self._accuracy_train = np.empty(shape=self._N_epochs)
-        self._accuracy_test = np.empty(shape=self._N_epochs)
-        self._mse_train = np.empty(shape=self._N_epochs)
-        self._mse_test = np.empty(shape=self._N_epochs)
-        self._mae_train = np.empty(shape=self._N_epochs)
-        self._mae_test = np.empty(shape=self._N_epochs)
-        #self._x_entropy_train = np.empty(shape=self._N_epochs)
-        #self._x_entropy_test = np.empty(shape=self._N_epochs)
+        self._accuracy_train = np.empty(shape=self._N_epochs+1)
+        self._accuracy_test = np.empty(shape=self._N_epochs+1)
+        self._mse_train = np.empty(shape=self._N_epochs+1)
+        self._mse_test = np.empty(shape=self._N_epochs+1)
+        self._mae_train = np.empty(shape=self._N_epochs+1)
+        self._mae_test = np.empty(shape=self._N_epochs+1)
+        #self._x_entropy_train = np.empty(shape=self._N_epochs+1)
+        #self._x_entropy_test = np.empty(shape=self._N_epochs+1)
            
     # [deriv]_ij = [X.T (Y_pred - Y)]_ij / N_samples
     def weight_deriv(self, x, y_pred, y, M):
@@ -51,15 +55,14 @@ class Perceptron(NeuralNetwork):
         return np.sum(y_pred - y, axis=0) / M
 
     def train(self, x_train, x_test, y_train, y_test):
-        N_samples = y_test.shape[0]
+        rng = np.random.default_rng()
 
+        N_samples = y_train.shape[0]
         if self._M < 0:
             M = N_samples
         else:
             M = self._M
-
-        #N_batch = int(N_samples / M)
-        #N_iter = N_batch * self._N_epochs
+        N_batch = int(N_samples / M)
 
         # AdaDelta is from arXiv:1212.5701v1
         # To store AdaDelta learning rate
@@ -69,71 +72,66 @@ class Perceptron(NeuralNetwork):
         Ed_w = self._eta**2
         Ed_b = self._eta**2
 
-        n = 0
-        p = 0
-        n_epochs = 0
-        trigger = True
-        finish = False
-        while not finish:
+        y_train_pred = np.empty(y_train.shape)
+        y_test_pred = np.empty(y_test.shape)
+        for i in range(self._N_epochs):
             
-            if self._observe:
-                if trigger == True:
-                    trigger = False
-                    y_train_pred_full = self.predict(x_train)
-                    #self._accuracy_train[n_epochs], self._mse_train[n_epochs], self._mae_train[n_epochs], self._x_entropy_train[n_epochs] = self.evaluate(y_pred=y_train_pred_full, y=y_train, x_entropy=True)
-                    self._accuracy_train[n_epochs], self._mse_train[n_epochs], self._mae_train[n_epochs] = self.evaluate(y_pred=y_train_pred_full, y=y_train)
-                    y_test_pred_full = self.predict(x_test)
-                    #self._accuracy_test[n_epochs], self._mse_test[n_epochs], self._mae_test[n_epochs], self._x_entropy_test[n_epochs] = self.evaluate(y_pred=y_test_pred_full, y=y_test, x_entropy=True)
-                    self._accuracy_test[n_epochs], self._mse_test[n_epochs], self._mae_test[n_epochs] = self.evaluate(y_pred=y_test_pred_full, y=y_test)
+            # Record data at end of epoch
+            y_train_pred[...] = self.predict(x_train)[...]
+            self._accuracy_train[i], self._mse_train[i], self._mae_train[i] = self.evaluate(y_pred=y_train_pred, y=y_train)
+            y_test_pred[...] = self.predict(x_test)[...]
+            self._accuracy_test[i], self._mse_test[i], self._mae_test[i] = self.evaluate(y_pred=y_test_pred, y=y_test)
+
+            # Shuffle data
+            if self._shuffle:
+                idx_rng = rng.permutation(N_samples)
+                x_train_copy = deepcopy(x_train[idx_rng])
+                y_train_copy = deepcopy(y_train[idx_rng])
+            else:
+                x_train_copy = x_train
+                y_train_copy = y_train
             
-            # Determine the indices of the current batch
-            idx = np.array(range(n*M, (n+1)*M)) % N_samples
-
-            # Get predictions for this batch
-            y_train_pred = self.activation_function(x_train[idx,:])
-
-            # Get gradient
-            w_deriv = self.weight_deriv(x=x_train[idx,:], y_pred=y_train_pred, y=y_train[idx,:], M=M)
-            b_deriv = self.bias_deriv(y_pred=y_train_pred, y=y_train[idx,:], M=M)
+            for n in range(N_batch):
             
-            # Accumulate gradients for AdaDelta
-            Eg_w = self._rho * Eg_w + (1.0 - self._rho) * w_deriv**2
-            Eg_b = self._rho * Eg_b + (1.0 - self._rho) * b_deriv**2
-            Eg_w_old = deepcopy(Eg_w)
-            Eg_b_old = deepcopy(Eg_b)
+                # Determine the indices of the current batch (allows wrap around)
+                idx = np.array(range(n*M, (n+1)*M)) % N_samples
+
+                # Get predictions for this batch
+                y_train_pred_copy = self.activation_function(x_train_copy[idx,:])
+
+                # Get gradient
+                w_deriv = self.weight_deriv(x=x_train_copy[idx,:], y_pred=y_train_pred_copy, y=y_train_copy[idx,:], M=M)
+                b_deriv = self.bias_deriv(y_pred=y_train_pred_copy, y=y_train_copy[idx,:], M=M)
             
-            # Update direction adapted by AdaDelta
-            #d_w = (self._eta / np.sqrt(Eg_w + self._eps)).T * w_deriv.T
-            #d_b = (self._eta / np.sqrt(Eg_b + self._eps)) * b_deriv
-            d_w = (np.sqrt(Ed_w + self._eps).T / np.sqrt(Eg_w + self._eps)).T * w_deriv.T
-            d_b = (np.sqrt(Ed_b + self._eps) / np.sqrt(Eg_b + self._eps)) * b_deriv
-
-            # Add momentum
-            d_w += self._gamma * np.sqrt(Ed_w + self._eps)
-            d_b += self._gamma * np.sqrt(Ed_b + self._eps)
+                # Accumulate gradients for AdaDelta
+                Eg_w = self._rho * Eg_w + (1.0 - self._rho) * w_deriv**2
+                Eg_b = self._rho * Eg_b + (1.0 - self._rho) * b_deriv**2
+                Eg_w_old = deepcopy(Eg_w)
+                Eg_b_old = deepcopy(Eg_b)
             
-            # Accumulate updates
-            Ed_w = self._rho * Ed_w + (1.0 - self._rho) * d_w**2
-            Ed_b = self._rho * Ed_b + (1.0 - self._rho) * d_b**2
+                # Update direction adapted by AdaDelta
+                #d_w = (self._eta / np.sqrt(Eg_w + self._eps)).T * w_deriv.T
+                #d_b = (self._eta / np.sqrt(Eg_b + self._eps)) * b_deriv
+                d_w = (np.sqrt(Ed_w + self._eps).T / np.sqrt(Eg_w + self._eps)).T * w_deriv.T
+                d_b = (np.sqrt(Ed_b + self._eps) / np.sqrt(Eg_b + self._eps)) * b_deriv
+
+                # Add momentum (default to 0 because adadelta is the default step size)
+                d_w += self._gamma * np.sqrt(Ed_w + self._eps)
+                d_b += self._gamma * np.sqrt(Ed_b + self._eps)
             
-            # Update weight and bias
-            self._weight -= d_w
-            self._bias -= d_b
-
-            # FIXME this does not really count properly if M does not divide N_epochs
-            p += 1
-            if ((p+1)*M) > N_samples:
-                p = 0
-                n_epochs += 1
-                trigger = True
-
-            n += 1
-
-            if n_epochs >= self._N_epochs:
-                finish = True
-
-        y_train_pred = self.predict(x_train)
-        y_test_pred = self.predict(x_test)
+                # Accumulate updates
+                Ed_w = self._rho * Ed_w + (1.0 - self._rho) * d_w**2
+                Ed_b = self._rho * Ed_b + (1.0 - self._rho) * d_b**2
+            
+                # Update weight and bias
+                self._weight -= d_w
+                self._bias -= d_b
+            
+        # Record data of final iteration    
+        y_train_pred[...] = self.predict(x_train)[...]
+        self._accuracy_train[-1], self._mse_train[-1], self._mae_train[-1] = self.evaluate(y_pred=y_train_pred, y=y_train)
+        y_test_pred[...] = self.predict(x_test)[...]
+        self._accuracy_test[-1], self._mse_test[-1], self._mae_test[-1] = self.evaluate(y_pred=y_test_pred, y=y_test)
         return y_train_pred, y_test_pred
     
     def predict(self, x):

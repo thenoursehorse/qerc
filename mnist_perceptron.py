@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('-eta', type=float, default=1.0)
     parser.add_argument('-gamma', type=float, default=0.0)
     parser.add_argument('-rho', type=float, default=0.95)
+    parser.add_argument('-shuffle', type=lambda x: bool(strtobool(x)), default='True')
     parser.add_argument('-standardize', type=lambda x: bool(strtobool(x)), default='True')
     parser.add_argument('-save', type=lambda x: bool(strtobool(x)), default='True')
     
@@ -118,14 +119,14 @@ if __name__ == '__main__':
     # There are 10 categories for MNIST
     output_size = 10
 
-    accuracy_train = np.empty(shape=(args.N_epochs, Nt))
-    accuracy_test = np.empty(shape=(args.N_epochs, Nt))
-    mse_train = np.empty(shape=(args.N_epochs, Nt))
-    mse_test = np.empty(shape=(args.N_epochs, Nt))
-    mae_train = np.empty(shape=(args.N_epochs, Nt))
-    mae_test = np.empty(shape=(args.N_epochs, Nt))
-    #x_entropy_train = np.empty(shape=(args.N_epochs, Nt))
-    #x_entropy_test = np.empty(shape=(args.N_epochs, Nt))
+    accuracy_train = np.empty(shape=(args.N_epochs+1, Nt))
+    accuracy_test = np.empty(shape=(args.N_epochs+1, Nt))
+    mse_train = np.empty(shape=(args.N_epochs+1, Nt))
+    mse_test = np.empty(shape=(args.N_epochs+1, Nt))
+    mae_train = np.empty(shape=(args.N_epochs+1, Nt))
+    mae_test = np.empty(shape=(args.N_epochs+1, Nt))
+    #x_entropy_train = np.empty(shape=(args.N_epochs+1, Nt))
+    #x_entropy_test = np.empty(shape=(args.N_epochs+1, Nt))
 
     avg_train = np.empty(shape=(Nt))
     std_train = np.empty(shape=(Nt))
@@ -145,7 +146,7 @@ if __name__ == '__main__':
                                 eta=args.eta,
                                 gamma=args.gamma,
                                 rho=args.rho,
-                                observe=True)
+                                shuffle=args.shuffle)
 
         # Standardize x
         if args.standardize:
