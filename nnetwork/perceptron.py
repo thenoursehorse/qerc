@@ -3,7 +3,7 @@ from copy import deepcopy
 from .nn import NeuralNetwork
         
 class Perceptron(NeuralNetwork):
-    def __init__(self, output_size, N_epochs=100, M=32, eta=1.0, gamma=0.9, rho=0.99, eps=1e-6, shuffle=True, **kwargs):
+    def __init__(self, output_size, N_epochs=100, M=32, eta=0.01, gamma=0.9, rho=0.99, eps=1e-6, shuffle=True, initialize_random=True, **kwargs):
         self._output_size = output_size
         self._N_epochs = N_epochs
         # Minibatch number. M = 1 is stochastic gradient descent (SGD), M = -1 batch gradient descent (BGD)
@@ -13,6 +13,7 @@ class Perceptron(NeuralNetwork):
         self._rho = rho
         self._eps = eps
         self._shuffle = shuffle
+        self._initialize_random = initialize_random
         super().__init__(**kwargs)
 
         assert (self._activation == 'softmax'), 'Can only use softmax activation function for perceptron !'
@@ -22,19 +23,21 @@ class Perceptron(NeuralNetwork):
             print("For AdaDelta: gamma = 0")
             print("For momentum: rho = 0")
 
-        # Initialize weights to zero
-        #self._weight = np.zeros(shape=(self._output_size, self._input_size))
-        #self._bias = np.zeros(shape=(self._output_size))
+        if self._initialize_random:
+            # Randomize weights
+            rng = np.random.default_rng()
+            self._rand = rng.normal
+            self._weight = self._rand(0, 1, (self._output_size, self._input_size)) * np.sqrt(1.0/(self._input_size)) # He initialization
+            #self._weight = self._rand(0, 1, (self._output_size, self._input_size)) * np.sqrt(2.0/(self._input_size + self._output_size)) # Xavier initialization
+            self._bias = np.zeros(shape=(self._output_size))
         
-        # Randomize weights using He initialization
-        rng = np.random.default_rng()
-        self._rand = rng.normal
-        self._weight = self._rand(0, 1, (self._output_size, self._input_size)) * np.sqrt(2.0/(self._output_size -1))
-        self._bias = np.zeros(shape=(self._output_size))
-        
-        #self._rand = rng.uniform
-        #self._weight = self._rand(-1, 1, (self._output_size, self._input_size))
-        #self._bias = self._rand(-1, 1, (self._output_size))
+            #self._rand = rng.uniform
+            #self._weight = self._rand(-1, 1, (self._output_size, self._input_size))
+            #self._bias = self._rand(-1, 1, (self._output_size))
+        else:
+            # Initialize weights to zero
+            self._weight = np.zeros(shape=(self._output_size, self._input_size))
+            self._bias = np.zeros(shape=(self._output_size))
 
         # To hold data
         self._accuracy_train = np.empty(shape=self._N_epochs+1)
@@ -43,8 +46,8 @@ class Perceptron(NeuralNetwork):
         self._mse_test = np.empty(shape=self._N_epochs+1)
         self._mae_train = np.empty(shape=self._N_epochs+1)
         self._mae_test = np.empty(shape=self._N_epochs+1)
-        #self._x_entropy_train = np.empty(shape=self._N_epochs+1)
-        #self._x_entropy_test = np.empty(shape=self._N_epochs+1)
+        self._losses_train = np.empty(shape=self._N_epochs+1)
+        self._losses_test = np.empty(shape=self._N_epochs+1)
            
     # [deriv]_ij = [X.T (Y_pred - Y)]_ij / N_samples
     def weight_deriv(self, x, y_pred, y, M):
@@ -77,37 +80,35 @@ class Perceptron(NeuralNetwork):
         for i in range(self._N_epochs):
             
             # Record data at end of epoch
-            y_train_pred[...] = self.predict(x_train)[...]
+            y_train_pred = self.predict(x_train)
             self._accuracy_train[i], self._mse_train[i], self._mae_train[i] = self.evaluate(y_pred=y_train_pred, y=y_train)
-            y_test_pred[...] = self.predict(x_test)[...]
+            y_test_pred = self.predict(x_test)
             self._accuracy_test[i], self._mse_test[i], self._mae_test[i] = self.evaluate(y_pred=y_test_pred, y=y_test)
 
-            # Shuffle data
-            if self._shuffle:
-                idx_rng = rng.permutation(N_samples)
-                x_train_copy = deepcopy(x_train[idx_rng])
-                y_train_copy = deepcopy(y_train[idx_rng])
-            else:
-                x_train_copy = x_train
-                y_train_copy = y_train
-            
             for n in range(N_batch):
             
-                # Determine the indices of the current batch (allows wrap around)
-                idx = np.array(range(n*M, (n+1)*M)) % N_samples
-
+                # Shuffle data
+                if self._shuffle:
+                    #idx = rng.permutation(N_samples)
+                    idx = rng.integers(low=0, high=N_samples, size=M, endpoint=False)
+                    x_train_copy = x_train[idx]
+                    y_train_copy = y_train[idx]
+                else:
+                    # Determine the indices of the current batch (allows wrap around)
+                    idx = np.array(range(n*M, (n+1)*M)) % N_samples
+                    x_train_copy = x_train[idx]
+                    y_train_copy = y_train[idx]
+            
                 # Get predictions for this batch
-                y_train_pred_copy = self.activation_function(x_train_copy[idx,:])
+                y_train_pred_copy = self.activation_function(x_train_copy)
 
                 # Get gradient
-                w_deriv = self.weight_deriv(x=x_train_copy[idx,:], y_pred=y_train_pred_copy, y=y_train_copy[idx,:], M=M)
-                b_deriv = self.bias_deriv(y_pred=y_train_pred_copy, y=y_train_copy[idx,:], M=M)
+                w_deriv = self.weight_deriv(x=x_train_copy, y_pred=y_train_pred_copy, y=y_train_copy, M=M)
+                b_deriv = self.bias_deriv(y_pred=y_train_pred_copy, y=y_train_copy, M=M)
             
                 # Accumulate gradients for AdaDelta
                 Eg_w = self._rho * Eg_w + (1.0 - self._rho) * w_deriv**2
                 Eg_b = self._rho * Eg_b + (1.0 - self._rho) * b_deriv**2
-                Eg_w_old = deepcopy(Eg_w)
-                Eg_b_old = deepcopy(Eg_b)
             
                 # Update direction adapted by AdaDelta
                 #d_w = (self._eta / np.sqrt(Eg_w + self._eps)).T * w_deriv.T
@@ -128,9 +129,9 @@ class Perceptron(NeuralNetwork):
                 self._bias -= d_b
             
         # Record data of final iteration    
-        y_train_pred[...] = self.predict(x_train)[...]
+        y_train_pred = self.predict(x_train)
         self._accuracy_train[-1], self._mse_train[-1], self._mae_train[-1] = self.evaluate(y_pred=y_train_pred, y=y_train)
-        y_test_pred[...] = self.predict(x_test)[...]
+        y_test_pred = self.predict(x_test)
         self._accuracy_test[-1], self._mse_test[-1], self._mae_test[-1] = self.evaluate(y_pred=y_test_pred, y=y_test)
         return y_train_pred, y_test_pred
     
@@ -165,10 +166,10 @@ class Perceptron(NeuralNetwork):
     def mae_test(self):
         return self._mae_test
     
-    #@property
-    #def x_entropy_train(self):
-    #    return self._x_entropy_train
+    @property
+    def losses_train(self):
+        return self._losses_train
 
-    #@property 
-    #def x_entropy_test(self):
-    #    return self._x_entropy_test
+    @property 
+    def losses_test(self):
+        return self._losses_test

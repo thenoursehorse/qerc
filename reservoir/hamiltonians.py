@@ -53,7 +53,7 @@ def ising_hamiltonian(N, g, alpha):
     else:
         for i in range(N):
             for j in range(N):
-                if i != j:
+                if i > j:
                     coupling = J / np.power( np.abs(i-j), alpha)
                     H += coupling * sz_list[i] * sz_list[j]
     return H

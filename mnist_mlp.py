@@ -6,7 +6,7 @@ from timeit import default_timer as timer
 import numpy as np
 
 from encoder.qubit_mnist import PCAQubits
-from nnetwork.perceptron import Perceptron
+from nnetwork.mlp import MLP
 from reservoir.observer import Observer
 
 if __name__ == '__main__':
@@ -17,10 +17,6 @@ if __name__ == '__main__':
     parser.add_argument('-alpha', type=float, default=1.51)
     parser.add_argument('-N_samples_train', type=float, default=60000)
     parser.add_argument('-N_samples_test', type=float, default=10000)
-    parser.add_argument('-activation',
-        choices=['softmax'],
-        default='softmax',
-    )
     parser.add_argument('-model',
         choices=['ising', 'spin-1/2', 'spin-1'],
         default='ising',
@@ -29,14 +25,11 @@ if __name__ == '__main__':
         choices=['rho_diag', 'psi', 'corr', 'entanglement'],
         default='rho_diag',
     )
-    parser.add_argument('-N_epochs', type=int, default=100)
+    parser.add_argument('-N_epochs', type=int, default=10)
     parser.add_argument('-stats_stride', type=int, default=10)
-    parser.add_argument('-M', type=int, default=100)
+    parser.add_argument('-M', type=int, default=128)
     parser.add_argument('-eta', type=float, default=0.01)
-    parser.add_argument('-gamma', type=float, default=0.0)
-    parser.add_argument('-rho', type=float, default=0.99)
-    parser.add_argument('-shuffle', type=lambda x: bool(strtobool(x)), default='True')
-    parser.add_argument('-initialize_random', type=lambda x: bool(strtobool(x)), default='True')
+    parser.add_argument('-shuffle', type=lambda x: bool(strtobool(x)), default='False')
     parser.add_argument('-standardize', type=lambda x: bool(strtobool(x)), default='True')
     parser.add_argument('-save', type=lambda x: bool(strtobool(x)), default='True')
     
@@ -126,8 +119,8 @@ if __name__ == '__main__':
     mse_test = np.empty(shape=(args.N_epochs+1, Nt))
     mae_train = np.empty(shape=(args.N_epochs+1, Nt))
     mae_test = np.empty(shape=(args.N_epochs+1, Nt))
-    #x_entropy_train = np.empty(shape=(args.N_epochs+1, Nt))
-    #x_entropy_test = np.empty(shape=(args.N_epochs+1, Nt))
+    losses_train = np.empty(shape=(args.N_epochs+1, Nt))
+    losses_test = np.empty(shape=(args.N_epochs+1, Nt))
 
     avg_train = np.empty(shape=(Nt))
     std_train = np.empty(shape=(Nt))
@@ -141,34 +134,28 @@ if __name__ == '__main__':
         x_train = x_train_all[n,:args.N_samples_train,:]
         x_test = x_test_all[n,:args.N_samples_test,:]
             
-        perceptron = Perceptron(input_size=input_size, 
-                                output_size=output_size,
-                                N_epochs=args.N_epochs,
-                                activation=args.activation,
-                                M=args.M,
-                                eta=args.eta,
-                                gamma=args.gamma,
-                                rho=args.rho,
-                                shuffle=args.shuffle,
-                                initialize_random=args.initialize_random)
+        mlp = MLP(input_size=input_size, 
+                  output_size=output_size,
+                  N_epochs=args.N_epochs,
+                  M=args.M,
+                  eta=args.eta,
+                  shuffle=args.shuffle)
 
         # Standardize x
         if args.standardize:
-            x_train, x_test = perceptron.standardize(x_train, x_test)
+            x_train, x_test = mlp.standardize(x_train, x_test)
 
         # Make the one hot vectors
-        y_train, y_test = perceptron.onehot_y(y_train=input_data.y_train, y_test=input_data.y_test)
+        y_train, y_test = mlp.onehot_y(y_train=input_data.y_train, y_test=input_data.y_test)
          
-        # Train the perceptron and take some obvservations
+        # Train deep network and take some obvservations
         start = timer()
-        y_train_pred, y_test_pred = perceptron.train(x_train=x_train, x_test=x_test, y_train=y_train, y_test=y_test)
+        y_train_pred, y_test_pred = mlp.train(x_train=x_train, x_test=x_test, y_train=y_train, y_test=y_test)
         end = timer()
-        print(f"n = {n+1}/{Nt} perceptron took:", end-start)
+        print(f"n = {n+1}/{Nt} mlp took:", end-start)
 
-        accuracy_train[:,n] = perceptron.accuracy_train 
-        mse_train[:,n] = perceptron.mse_train 
-        mae_train[:,n] = perceptron.mae_train 
-        #x_entropy_train[:,n] = perceptron.x_entropy_train
+        accuracy_train[:,n] = mlp.accuracy_train 
+        losses_train[:,n] = mlp.losses_train
         avg_train[n] = np.mean(accuracy_train[-args.stats_stride:-1,n])
         std_train[n] = np.std(accuracy_train[-args.stats_stride:-1,n])
         best_train[n] = np.max(accuracy_train[:,n])
@@ -176,10 +163,8 @@ if __name__ == '__main__':
         print("Training accuracy std: ", std_train[n])
         print("Training best: ", best_train[n])
 
-        accuracy_test[:,n] = perceptron.accuracy_test
-        mse_test[:,n] = perceptron.mse_test
-        mae_test[:,n] = perceptron.mae_test
-        #x_entropy_test[:,n] = perceptron.x_entropy_test
+        accuracy_test[:,n] = mlp.accuracy_test
+        losses_test[:,n] = mlp.losses_test
         avg_test[n] = np.mean(accuracy_test[-args.stats_stride:-1,n])
         std_test[n] = np.std(accuracy_test[-args.stats_stride:-1,n])
         best_test[n] = np.max(accuracy_test[:,n])
@@ -191,21 +176,17 @@ if __name__ == '__main__':
     if args.save:
         from nnetwork.nndata import NNData
             
-        filename_perc = filename+"_perceptron"
+        filename_perc = filename+"_mlp"
         filename_perc += f"_nodetype_{args.node_type}"
-        filename_perc += f"_activation_{args.activation}"
+        filename_perc += f"_activation_softmax"
         filename_perc += ".h5"
 
         nndata = NNData(filename=filename_perc,
                         tlist=tlist,
                         accuracy_train=accuracy_train,
                         accuracy_test=accuracy_test,
-                        mse_train=mse_train,
-                        mse_test=mse_test,
-                        mae_train=mae_train,
-                        mae_test =mae_test,
-                        #x_entropy_train=x_entropy_train,
-                        #x_entropy_test=x_entropy_test,
+                        losses_train=losses_train,
+                        losses_test=losses_test,
                         avg_train=avg_train,
                         avg_test=avg_test,
                         std_train=std_train,
@@ -217,14 +198,12 @@ if __name__ == '__main__':
                         alpha=args.alpha,
                         N_samples_train=args.N_samples_train,
                         N_samples_test=args.N_samples_test,
-                        activation=args.activation,
+                        activation="softmax",
                         model=args.model,
                         node_type=args.node_type,
                         standardize=args.standardize,
                         N_epochs=args.N_epochs,
                         stats_stride=args.stats_stride,
                         M=args.M,
-                        eta=args.eta,
-                        gamma=args.gamma,
-                        rho=args.rho)
+                        eta=args.eta)
         nndata.save() 

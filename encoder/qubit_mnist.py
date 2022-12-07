@@ -31,30 +31,31 @@ class PCAQubits(Encoder):
                 if self.save:
                     self.save_psi0()
 
-    def get_pca(self, N=None):
+    def get_pca(self, N=None, use_sklearn_scalar=False):
         #from keras.datasets import mnist
         from sklearn.datasets import fetch_openml
         from sklearn.model_selection import train_test_split
-        from sklearn.preprocessing import StandardScaler
         from sklearn.decomposition import PCA
         
         if N == None:
             N = self.N
-
-        #(self.x_train, self.y_train), (self.x_test, self.y_test) = mnist.load_data()
-        #self.x_train = self.x_train.reshape(-1, 784).astype("float32") / 255.0
-        #self.x_test = self.x_test.reshape(-1, 784).astype("float32") / 255.0
 
         mnist = fetch_openml('mnist_784', as_frame=False)
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(mnist.data, mnist.target, test_size=1/7.0, random_state=0)
         self.y_train = self.y_train.astype(int)
         self.y_test = self.y_test.astype(int)
 
-        # Standardize pixels and transform
-        std_scalar = StandardScaler()
-        std_scalar.fit(self.x_train)
-        self.x_train_scalar = std_scalar.transform(self.x_train)
-        self.x_test_scalar = std_scalar.transform(self.x_test)
+        if use_sklearn_scalar:
+            # Standardize pixels and transform
+            from sklearn.preprocessing import StandardScaler
+            std_scalar = StandardScaler()
+            std_scalar.fit(self.x_train)
+            self.x_train_scalar = std_scalar.transform(self.x_train)
+            self.x_test_scalar = std_scalar.transform(self.x_test)
+        
+        else:
+            self.x_train_scalar = self.x_train / 255.0
+            self.x_test_scalar = self.x_test / 255.0
 
         # keep 2*N coponents (N is # of qubits)
         pca = PCA(2*N)
@@ -73,14 +74,16 @@ class PCAQubits(Encoder):
         self.phi_test = self.pca_test[:,N:2*N]
 
         # Normalize to the range 0-pi
-        pca_min = np.min(self.pca_train)
-        pca_max = np.max(self.pca_test)
-        self.theta_train = np.pi * (self.theta_train - pca_min ) / (pca_max - pca_min)
-        self.theta_test = np.pi * (self.theta_test - pca_min ) / (pca_max - pca_min)
-        self.phi_train = np.pi * (self.phi_train - pca_min ) / (pca_max - pca_min)
-        self.phi_test = np.pi * (self.phi_test - pca_min ) / (pca_max - pca_min)
+        
+        # Normalize across all qubits and samples for theta and phi together (bad)
+        #pca_min = np.min(self.pca_train)
+        #pca_max = np.max(self.pca_train)
+        #self.theta_train = np.pi * (self.theta_train - pca_min ) / (pca_max - pca_min)
+        #self.theta_test = np.pi * (self.theta_test - pca_min ) / (pca_max - pca_min)
+        #self.phi_train = np.pi * (self.phi_train - pca_min ) / (pca_max - pca_min)
+        #self.phi_test = np.pi * (self.phi_test - pca_min ) / (pca_max - pca_min)
 
-        # Normalize to the range 0-pi
+        # Normalize across all qubits and samples for theta and phi separately (bad)
         #theta_min = np.min(self.theta_train)
         #theta_max = np.max(self.theta_train)
         #self.theta_train = np.pi * (self.theta_train - theta_min ) / (theta_max - theta_min)
@@ -90,6 +93,22 @@ class PCAQubits(Encoder):
         #phi_max = np.max(self.phi_train)
         #self.phi_train = np.pi * (self.phi_train - phi_min ) / (phi_max - phi_min)
         #self.phi_test = np.pi * (self.phi_test - phi_min ) / (phi_max - phi_min)
+
+        # Normalize across each qubit individually (each component has its own bloch sphere)
+        theta_min = np.min(self.theta_train, axis=0)
+        theta_max = np.max(self.theta_train, axis=0)
+        self.theta_train = np.pi * (self.theta_train - theta_min ) / (theta_max - theta_min)
+        self.theta_test = np.pi * (self.theta_test - theta_min ) / (theta_max - theta_min)
+        
+        phi_min = np.min(self.phi_train, axis=0)
+        phi_max = np.max(self.phi_train, axis=0)
+        self.phi_train = np.pi * (self.phi_train - phi_min ) / (phi_max - phi_min)
+        self.phi_test = np.pi * (self.phi_test - phi_min ) / (phi_max - phi_min)
+
+        # FIXME shannon entropy test from Akitada
+        # shannon_entropy_avg = np.mean(-np.sum(x_train_all[i]*np.log2(x_train_all[i]+1e-10),axis=1))
+        # shannon_entropy_avg = np.mean(-np.sum(x_train_all*np.log2(x_train_all+1e-10),axis=2), axis=1)
+        # shannon_entropy_std = np.std(-np.sum(x_train_all*np.log2(x_train_all+1e-10),axis=2), axis=1)
 
         # Truncate test data to make sure it fits in 0-pi range
         idx_max = np.where(self.theta_test > np.pi)

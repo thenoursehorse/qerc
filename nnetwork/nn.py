@@ -63,7 +63,7 @@ class NeuralNetwork(object):
         # Majority vote for 1 hot vectors
         y_pred_trunc = np.argmax(y_pred, axis=-1)
         y_trunc = np.argmax(y, axis=-1)
-
+        
         accuracy = np.sum(y_pred_trunc == y_trunc) / y.shape[0]
         mse = np.mean((y_pred - y)**2)
         mae = np.mean(np.abs(y_pred - y))
@@ -97,18 +97,21 @@ class NeuralNetwork(object):
             
             return T_train, T_test
         
-    def standardize(self, x_train, x_test):
-        from sklearn.preprocessing import StandardScaler
-        std_scalar = StandardScaler()
+    def standardize(self, x_train, x_test, individual=True):
+        if individual:
+            # Standardize each sample to individually have mean 0 and std deviation 1
+            x_train = ( x_train - np.mean(x_train, axis=-1, keepdims=True) ) / ( np.std(x_train, axis=-1, keepdims=True) + 1e-10 )
+            x_test = ( x_test - np.mean(x_test, axis=-1, keepdims=True) ) / ( np.std(x_test, axis=-1, keepdims=True) + 1e-10 )
+
+        else:
+            # Standardize output of training set
+            from sklearn.preprocessing import StandardScaler
+            std_scalar = StandardScaler()
+            std_scalar.fit(x_train)
+            x_train = std_scalar.transform(x_train)
+            x_test = std_scalar.transform(x_test)
         
-        # Standardize output of training set
-        std_scalar.fit(x_train)
-        x_train_std = std_scalar.transform(x_train)
-        
-        # Apply to test
-        x_test_std = std_scalar.transform(x_test)
-        
-        return x_train_std, x_test_std
+        return x_train, x_test
             
     @property
     def input_size(self):

@@ -86,12 +86,12 @@ identity() {
   outfile=identity_${model}_N_${N}_g_${g}_alpha_${alpha}.out
   
   python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
-          -activation 'identity' -standardize 'True' -pinv 'numpy' \
+          -activation 'identity' -standardize 'False' -pinv 'numpy' \
 	  -filename_root ${filename_root} -model ${model} -node_type 'rho_diag' \
 	  &>> ${outfile}
 
   python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
-          -activation 'identity' -standardize 'True' -pinv 'numpy' \
+          -activation 'identity' -standardize 'False' -pinv 'numpy' \
 	  -filename_root ${filename_root} -model ${model} -node_type 'psi' \
 	  &>> ${outfile}
   
@@ -132,4 +132,4 @@ parallel -j${njobs} --memsuspend 2G perceptron ::: "${alpha_arr[@]}" ::: "${N_ar
 
 parallel -j${njobs} --memsuspend 2G identity ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
 
-parallel -j${njobs} --memsuspend 2G elm ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
+#parallel -j${njobs} --memsuspend 2G elm ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
