@@ -65,7 +65,7 @@ class DenseLayer(tf.Module):
             # Infer the input dimension based on first call
             self.in_dim = x.shape[1]
             # Initialize the weights and biases using Xavier scheme
-            self.w = tf.Variable(xavier_init(shape=(self.in_dim, self.out_dim)))
+            self.w = tf.Variable(self.weight_init(shape=(self.in_dim, self.out_dim)))
             self.b = tf.Variable(tf.zeros(shape=(self.out_dim,)))
             self.built = True
         # Compute the forward pass
@@ -93,6 +93,7 @@ class Adam:
                 self.v_dvar.append(v)
                 self.s_dvar.append(s)
                 self.built = True
+        
         # Update the model variables given their gradients
         for i, (d_var, var) in enumerate(zip(grads, vars)):
             self.v_dvar[i].assign(self.beta_1*self.v_dvar[i] + (1-self.beta_1)*d_var)

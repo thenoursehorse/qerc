@@ -21,6 +21,10 @@ if __name__ == '__main__':
         choices=['rho_diag', 'psi', 'corr', 'entanglement'],
         default='rho_diag',
     )
+    parser.add_argument('-nn_type',
+        choices=['perceptron', 'identity', 'elm', 'mlp'],
+        default='perceptron',
+    )
     parser.add_argument('-save', type=lambda x: bool(strtobool(x)), default='True')
     parser.add_argument('-show', type=lambda x: bool(strtobool(x)), default='False')
 
@@ -32,8 +36,13 @@ if __name__ == '__main__':
     if args.save:
         Path('figs/').mkdir(parents=True, exist_ok=True)
 
-    g_list = np.arange(0, 1.5+0.1/2.0, 0.1)
-    N_list = np.array([5, 6, 7, 8, 9, 10], dtype=int)
+    g_list = []
+    g_list = np.append(g_list, np.arange(0.5, 5+0.5/2.0, 0.5))
+    g_list = np.append(g_list, np.arange(0.1, 2+0.1/2.0, 0.1))
+    #g_list = np.append(g_list, np.arange(0.9, 1.1+0.01/2.0, 0.01))
+    g_list = np.unique(g_list)
+
+    N_list = np.array([5, 6, 7, 8, 9, 10, 11], dtype=int)
     
     #g_list = np.arange(0.9, 0.93+0.01/2.0, 0.01)
     #g_list = np.append(g_list, np.arange(0.95, 1.1+0.01/2.0, 0.01))
@@ -45,32 +54,37 @@ if __name__ == '__main__':
                    N_list=N_list, 
                    model=args.model, 
                    alpha=args.alpha, 
-                   node_type=args.node_type, 
+                   node_type=args.node_type,
+                   nn_type=args.nn_type,
                    activation=args.activation, 
                    save_root=save_root, 
                    save=args.save, 
                    show=args.show)
-
-    N = 10
-    #N = 10
-    #g = 0.97
-    g = 1.0
-    hidden_size = -1
-    #hidden_size = 784
-    #hidden_size = 2000
-    if args.activation == 'identity':
-     hidden_size = 0
-    #time = 1.0
-    #time = 2.0
-    time = 5.0
-
-
-    plot.nodes(N=N, g=g, time=time)
-    plot.time(N=N, g=g, hidden_size=hidden_size)
-    plot.g(N=N, hidden_size=hidden_size, time=time)
-    plot.g(hidden_size=hidden_size, time=time)
-    plot.N(g=g, hidden_size=hidden_size, time=time)
     
-    #g_list_for_N = np.array([0.0, 0.3, 0.4, 0.7, 0.97, 1.0, 1.03, 1.3, 1.5])
-    g_list_for_N = np.array([0.0, 0.3, 0.4, 0.7, 1.0, 1.3, 1.5])
-    plot.N(g_list=g_list_for_N, hidden_size=hidden_size, time=time)
+    #if args.nn_type == 'elm':
+    #    plot.nodes(N=N, g=g, time=time)
+
+    if args.nn_type == 'perceptron':
+        plot.epochs(N=11, g=0.5, time=5)
+        plot.epochs(N=11, g=1, time=5)
+        plot.epochs(N=11, g=5, time=5)
+
+    plot.time(N=10, g=5)
+    plot.time(N=11, g=5)
+    
+    plot.time(N=10, g=1)
+    plot.time(N=11, g=1)
+    
+    plot.g(N=10, time=3.5, xmin=0)
+    plot.g(N=11, time=3.5, xmin=0)
+    
+    plot.g(N=10, time=5, xmin=0, xmax=np.max(g_list))
+    plot.g(N=11, time=5, xmin=0, xmax=np.max(g_list))
+
+    plot.g(N_list=[9,10,11], time=3.5, xmin=0, xmax=np.max(g_list))
+    plot.g(N_list=[9,10,11], time=5, xmin=0, xmax=np.max(g_list))
+    
+    plot.N(g=1, time=5)
+    
+    g_list_for_N = np.array([0.1, 1, 3, 5])
+    plot.N(g_list=g_list_for_N, time=5)

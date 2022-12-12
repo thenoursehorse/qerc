@@ -29,14 +29,21 @@ if __name__ == '__main__':
         choices=['rho_diag', 'psi', 'corr', 'entanglement'],
         default='rho_diag',
     )
+    parser.add_argument('-optimizer',
+        choices=['adam', 'adadelta', 'nag', 'sgd'],
+        default='adam',
+    )
+    parser.add_argument('-initializer',
+        choices=['xavier', 'he', 'zeros'],
+        default='xavier',
+    )
     parser.add_argument('-N_epochs', type=int, default=100)
     parser.add_argument('-stats_stride', type=int, default=10)
     parser.add_argument('-M', type=int, default=100)
-    parser.add_argument('-eta', type=float, default=0.01)
-    parser.add_argument('-gamma', type=float, default=0.0)
-    parser.add_argument('-rho', type=float, default=0.99)
+    parser.add_argument('-eta', type=float, default=0.001)
+    parser.add_argument('-beta_1', type=float, default=0.9)
+    parser.add_argument('-beta_2', type=float, default=0.999)
     parser.add_argument('-shuffle', type=lambda x: bool(strtobool(x)), default='True')
-    parser.add_argument('-initialize_random', type=lambda x: bool(strtobool(x)), default='True')
     parser.add_argument('-standardize', type=lambda x: bool(strtobool(x)), default='True')
     parser.add_argument('-save', type=lambda x: bool(strtobool(x)), default='True')
     
@@ -147,10 +154,11 @@ if __name__ == '__main__':
                                 activation=args.activation,
                                 M=args.M,
                                 eta=args.eta,
-                                gamma=args.gamma,
-                                rho=args.rho,
+                                beta_1=args.beta_1,
+                                beta_2=args.beta_2,
                                 shuffle=args.shuffle,
-                                initialize_random=args.initialize_random)
+                                optimizer=args.optimizer,
+                                initializer=args.initializer)
 
         # Standardize x
         if args.standardize:
@@ -225,6 +233,8 @@ if __name__ == '__main__':
                         stats_stride=args.stats_stride,
                         M=args.M,
                         eta=args.eta,
-                        gamma=args.gamma,
-                        rho=args.rho)
+                        beta_1=args.beta_1,
+                        beta_2=args.beta_2,
+                        optimizer=args.optimizer,
+                        initializer=args.initializer)
         nndata.save() 

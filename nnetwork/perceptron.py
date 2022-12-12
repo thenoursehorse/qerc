@@ -1,43 +1,45 @@
 import numpy as np
 from copy import deepcopy
-from .nn import NeuralNetwork
+from .nn import NeuralNetwork, AdaDelta, Adam, NAG, SGD, weight_initializer
         
 class Perceptron(NeuralNetwork):
-    def __init__(self, output_size, N_epochs=100, M=32, eta=0.01, gamma=0.9, rho=0.99, eps=1e-6, shuffle=True, initialize_random=True, **kwargs):
+    def __init__(self, output_size, N_epochs=100, M=32, eta=0.001, beta_1=0.9, beta_2=0.999, eps=1e-7, optimizer='adam', initializer='xavier', shuffle=True, **kwargs):
         self._output_size = output_size
         self._N_epochs = N_epochs
         # Minibatch number. M = 1 is stochastic gradient descent (SGD), M = -1 batch gradient descent (BGD)
         self._M = M
         self._eta = eta
-        self._gamma = gamma
-        self._rho = rho
+        self._beta_1 = beta_1
+        self._beta_2 = beta_2
         self._eps = eps
+        self._optimizer = optimizer
         self._shuffle = shuffle
-        self._initialize_random = initialize_random
+        self._initializer = initializer
         super().__init__(**kwargs)
 
         assert (self._activation == 'softmax'), 'Can only use softmax activation function for perceptron !'
 
-        if (np.abs(self._rho) > 0.01) and (np.abs(self._gamma) > 0.01):
-            print("WARNING: Doing momentum and AdaDelta at the same time can be risky. You should know what you're doing !")
-            print("For AdaDelta: gamma = 0")
-            print("For momentum: rho = 0")
+        # Initialize perceptron weights
+        self._weight, self._bias = weight_initializer(input_size=self._input_size, output_size=self._output_size, initializer=initializer)
 
-        if self._initialize_random:
-            # Randomize weights
-            rng = np.random.default_rng()
-            self._rand = rng.normal
-            self._weight = self._rand(0, 1, (self._output_size, self._input_size)) * np.sqrt(1.0/(self._input_size)) # He initialization
-            #self._weight = self._rand(0, 1, (self._output_size, self._input_size)) * np.sqrt(2.0/(self._input_size + self._output_size)) # Xavier initialization
-            self._bias = np.zeros(shape=(self._output_size))
-        
-            #self._rand = rng.uniform
-            #self._weight = self._rand(-1, 1, (self._output_size, self._input_size))
-            #self._bias = self._rand(-1, 1, (self._output_size))
+        # Initialize optimizer
+        if self._optimizer == 'adam':
+            # good defaults are eta=0.001, beta_1=0.9, beta_2=0.999, eps=1e-7
+            self._optimizer_w = Adam(eta=self._eta, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
+            self._optimizer_b = Adam(eta=self._eta, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
+        elif self._optimizer == 'adadelta':
+            # good defaults are eta=0.01, rho=0.99, eps=1e-6
+            self._optimizer_w = AdaDelta(eta=self._eta, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
+            self._optimizer_b = AdaDelta(eta=self._eta, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
+        elif self._optimizer == 'nag':
+            # good defaults are eta=0.01, rho=0.9
+            self._optimizer_w = NAG(eta=self._eta, gamma=self._beta_1)
+            self._optimizer_b = NAG(eta=self._eta, gamma=self._beta_1)
+        elif self._optimizer == 'sgd':
+            self._optimizer_w = SGD(eta=self._eta)
+            self._optimizer_b = SGD(eta=self._eta)
         else:
-            # Initialize weights to zero
-            self._weight = np.zeros(shape=(self._output_size, self._input_size))
-            self._bias = np.zeros(shape=(self._output_size))
+            raise ValueError(f'unknown activation optimizer {self._optimizer}.')
 
         # To hold data
         self._accuracy_train = np.empty(shape=self._N_epochs+1)
@@ -51,7 +53,7 @@ class Perceptron(NeuralNetwork):
            
     # [deriv]_ij = [X.T (Y_pred - Y)]_ij / N_samples
     def weight_deriv(self, x, y_pred, y, M):
-        return x.T @ (y_pred - y) / M
+        return (x.T @ (y_pred - y)).T / M
 
     # [deriv]_j = \sum_k [Y_pred - Y]_j / N_samples
     def bias_deriv(self, y_pred, y, M):
@@ -67,14 +69,6 @@ class Perceptron(NeuralNetwork):
             M = self._M
         N_batch = int(N_samples / M)
 
-        # AdaDelta is from arXiv:1212.5701v1
-        # To store AdaDelta learning rate
-        # if rho = 0 then AdaDelta is turned off
-        Eg_w = 0.0
-        Eg_b = 0.0
-        Ed_w = self._eta**2
-        Ed_b = self._eta**2
-
         y_train_pred = np.empty(y_train.shape)
         y_test_pred = np.empty(y_test.shape)
         for i in range(self._N_epochs):
@@ -85,19 +79,21 @@ class Perceptron(NeuralNetwork):
             y_test_pred = self.predict(x_test)
             self._accuracy_test[i], self._mse_test[i], self._mae_test[i] = self.evaluate(y_pred=y_test_pred, y=y_test)
 
+            # Shuffle data
+            if self._shuffle:
+                #idx = rng.permutation(N_samples)
+                #idx = rng.integers(low=0, high=N_samples, size=M, endpoint=False)
+                idx_rng = rng.integers(low=0, high=N_samples, size=N_samples, endpoint=False)
+
             for n in range(N_batch):
-            
-                # Shuffle data
+                # Determine the indices of the current batch (allows wrap around)
+                idx = np.array(range(n*M, (n+1)*M)) % N_samples
+
                 if self._shuffle:
-                    #idx = rng.permutation(N_samples)
-                    idx = rng.integers(low=0, high=N_samples, size=M, endpoint=False)
-                    x_train_copy = x_train[idx]
-                    y_train_copy = y_train[idx]
-                else:
-                    # Determine the indices of the current batch (allows wrap around)
-                    idx = np.array(range(n*M, (n+1)*M)) % N_samples
-                    x_train_copy = x_train[idx]
-                    y_train_copy = y_train[idx]
+                    idx = idx_rng[idx]
+                
+                x_train_copy = x_train[idx]
+                y_train_copy = y_train[idx]
             
                 # Get predictions for this batch
                 y_train_pred_copy = self.activation_function(x_train_copy)
@@ -105,29 +101,11 @@ class Perceptron(NeuralNetwork):
                 # Get gradient
                 w_deriv = self.weight_deriv(x=x_train_copy, y_pred=y_train_pred_copy, y=y_train_copy, M=M)
                 b_deriv = self.bias_deriv(y_pred=y_train_pred_copy, y=y_train_copy, M=M)
-            
-                # Accumulate gradients for AdaDelta
-                Eg_w = self._rho * Eg_w + (1.0 - self._rho) * w_deriv**2
-                Eg_b = self._rho * Eg_b + (1.0 - self._rho) * b_deriv**2
-            
-                # Update direction adapted by AdaDelta
-                #d_w = (self._eta / np.sqrt(Eg_w + self._eps)).T * w_deriv.T
-                #d_b = (self._eta / np.sqrt(Eg_b + self._eps)) * b_deriv
-                d_w = (np.sqrt(Ed_w + self._eps).T / np.sqrt(Eg_w + self._eps)).T * w_deriv.T
-                d_b = (np.sqrt(Ed_b + self._eps) / np.sqrt(Eg_b + self._eps)) * b_deriv
 
-                # Add momentum (default to 0 because adadelta is the default step size)
-                d_w += self._gamma * np.sqrt(Ed_w + self._eps)
-                d_b += self._gamma * np.sqrt(Ed_b + self._eps)
-            
-                # Accumulate updates
-                Ed_w = self._rho * Ed_w + (1.0 - self._rho) * d_w**2
-                Ed_b = self._rho * Ed_b + (1.0 - self._rho) * d_b**2
-            
                 # Update weight and bias
-                self._weight -= d_w
-                self._bias -= d_b
-            
+                self._weight = self._optimizer_w.apply_gradients(vars=self._weight, dvars=w_deriv)
+                self._bias = self._optimizer_b.apply_gradients(vars=self._bias, dvars=b_deriv)
+
         # Record data of final iteration    
         y_train_pred = self.predict(x_train)
         self._accuracy_train[-1], self._mse_train[-1], self._mae_train[-1] = self.evaluate(y_pred=y_train_pred, y=y_train)

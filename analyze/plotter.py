@@ -12,7 +12,8 @@ plt.rcParams.update({
     #'mathtext.fontset' : 'stix',
     'mathtext.fontset' : 'cm',
     'font.family' : 'STIXGeneral',
-    'lines.markersize' : 4,
+    'lines.markersize' : 2,
+    'lines.linewidth' : 1,
 })
 
 class Plotter(object):
@@ -28,7 +29,7 @@ class Plotter(object):
                        save=True,
                        show=False,
                        save_root='figs/',
-                       nn_type='elm'
+                       nn_type='perceptron'
                        ):
         self._g_list = g_list
         self._N_list = N_list
@@ -59,37 +60,39 @@ class Plotter(object):
         data.load()
         
         self._tlist = data.tlist
-        self._accuracy_train = data.accuracy_train
-        self._accuracy_test = data.accuracy_test
         self._mse_train = data.mse_train
         self._mse_test = data.mse_test
-        #self._mae_train = data.mae_train
-        #self._mae_test = data.mae_test
+        self._mae_train = data.mae_train
+        self._mae_test = data.mae_test
         
-        if self._nn_type == 'elm':
-            self._hidden_array = data.hidden_array
+        #if self._nn_type == 'elm':
+        #    self._hidden_array = data.hidden_array
         
-        elif self._nn_type == 'perceptron':
-            self._x_entropy_train = data.x_entropy_train
-            self._x_entropy_test = data.x_entropy_test
+        if self._nn_type == 'perceptron':
+            self._accuracy_train = data.accuracy_train
+            self._accuracy_test = data.accuracy_test
+           
             self._avg_train = data.avg_train
             self._avg_test = data.avg_test
             self._std_train = data.std_train
             self._std_test = data.std_test
+            
+            #self._losses_train = data.losses_train
+            #self._losses_test = data.losses_train
+
+            self._N_epochs = data.N_epochs
+
+        elif (self._nn_type == 'elm') and (self._activation == 'identity'):
+            self._accuracy_train = data.accuracy_train
+            self._accuracy_test = data.accuracy_test
+
+            self._avg_train = self._accuracy_train[0,:]
+            self._avg_test = self._accuracy_test[0,:]
+            self._std_train = np.zeros(shape=self._avg_train.shape)
+            self._std_test = np.zeros(shape=self._avg_test.shape)
 
         else:
             raise ValueError(f"Unrecognized neural network type !")
-
-        ## FIXME
-        #input_size = 2**self._N
-        #hidden_array = np.arange(500, 4000 + 500/2.0, 500, dtype=int)
-        #hidden_array = np.append(hidden_array, [input_size, 784])
-        #hidden_array.sort()
-        #self._hidden_array = hidden_array
-        #if self._activation == 'identity':
-        #    self._hidden_array = np.array([0])
-        #    
-        #self._tlist = np.arange(0, 5+0.5/2.0, 0.5)
 
     def power_func(self, x, a, b, c):
         return a * np.power(x, b) + c
@@ -116,19 +119,21 @@ class Plotter(object):
         if data == 'Training':
             accuracy = self._accuracy_train
             mse = self._mse_train
-            #mae = self._mae_train
+            mae = self._mae_train
+            avg = self._avg_train
+            std = self._std_train
 
         elif data == 'Testing':
             accuracy = self._accuracy_test
             mse = self._mse_test
-            #mae = self._mae_test
+            mae = self._mae_test
+            avg = self._avg_test
+            std = self._std_test
 
         else:
             raise ValueError(f'unknown data type {data}.')
         
-        mae = None
-
-        return accuracy, mse, mae
+        return accuracy, avg, std, mse, mae
         
     def _nodes_picker(self, hidden_size, N):
         if hidden_size < 0:
@@ -145,6 +150,18 @@ class Plotter(object):
         else:
             nodes = hidden_size
         return nodes
+
+    def _axis_limits(self, x, y, xmin, xmax, ymin, ymax):
+        #if xmin == None:
+        #    xmin = np.min(x)
+        #if xmax == None:
+        #    xmax = np.max(x)
+        #if ymin == None:
+        #    ymin = np.min(y)
+        #if ymax == None:
+        #    ymax = np.max(y)
+
+        return xmin, xmax, ymin, ymax
 
     def _get_figure(self, N_figs=1, gap_height_ratio=0.2):
         num_gaps = N_figs - 1                           # for vertical stacking
@@ -252,46 +269,9 @@ class Plotter(object):
         else:
             raise ValueError(f'Do you really need to put more than 10 lines on a figure?')
 
-    def time(self, N, g, hidden_size=-1):
-        color = self._color_picker(N_lines=2)
-        marker = self._marker_picker(N_lines=2)
-        fig, axis = self._get_figure(N_figs=1)
+    def nodes(self, N, g, time=1.0, xmin=None, xmax=None, ymin=None, ymax=None):
+        assert self._nn_type == 'elm', 'Plotting scaling with nodes requires the elm classical optimizer'
 
-        nodes = self._nodes_picker(hidden_size, N)
-
-        self._N = N
-        self._g = g
-        self.load()
-        x = self._tlist
-        h = self._hidden_value_to_index(nodes)
-        
-        for i, data in enumerate(['Training', 'Testing']):
-            accuracy, mse, mae = self._data_picker(data=data)
-            
-            axis[0].plot(x, accuracy[h,:], linestyle='None', color=color[i], marker=marker[i], label=data, clip_on=False, zorder=10)
-            axis[0].plot(x, accuracy[h,:], '-', color=color[i], clip_on=False, zorder=10)
-        
-        axis[0].set_ylabel('Acc.')
-        #axis[0].set_ylim(ymin=0.7, ymax=1.0)
-        axis[0].set_ylim(ymax=1.0)
-        axis[0].set_xlim(xmin=0, xmax=np.max(x))
-        axis[0].legend(loc=4, frameon=False)
-        axis[0].set_xlabel(r'$t J$')
-        
-        if hidden_size < 0:
-            title = f'N = {N}     g = {g}     $\\alpha$ = {self._alpha}     nodes = $2^N$'
-        else:
-            title = f'N = {N}     g = {g}     $\\alpha$ = {self._alpha}     nodes = {nodes}'
-        fig.suptitle(title)
-        
-        if self._save:
-            filename = f"time_N_{self._N}_g_{self._g}_h_{nodes}"
-            plt.savefig(self._save_root+filename+'.pdf')
-
-        if self._show:
-            plt.show()
-
-    def nodes(self, N, g, time=1.0):
         color = self._color_picker(N_lines=2)
         marker = self._marker_picker(N_lines=2)
         fig, axis = self._get_figure(N_figs=2)
@@ -325,17 +305,17 @@ class Plotter(object):
             #mse_min_idx = np.argmin(mse[:,n])
             #mse_min = accuracy[mse_min_idx,n]
             #axis[0].plot([0, np.max(x)], [mse_min, mse_min], '--', color=color[i])
-            
+        
+        xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
         
         axis[0].set_ylabel('Acc.')
-        #axis[0].set_ylim(ymin=0.7, ymax=1.0)
-        axis[0].set_ylim(ymax=1.0)
-        axis[0].set_xlim(xmin=0, xmax=np.max(x))
-        axis[0].legend(loc=4, frameon=False)
+        axis[0].set_ylim(ymin=ymin, ymax=ymax)
+        axis[0].set_xlim(xmin=xmin, xmax=xmax)
+        axis[0].legend(frameon=False)
         
         axis[1].set_ylabel('Mean-squared error')
-        axis[1].set_ylim(ymin=0)
-        axis[1].set_xlim(xmin=0, xmax=np.max(x))
+        axis[1].set_ylim(ymin=ymin, ymax=ymax)
+        axis[1].set_xlim(xmin=xmin, xmax=xmax)
         
         #axis[2].set_ylabel('Absolute-squared error')
         #axis[2].set_ylim(ymin=0)
@@ -352,7 +332,82 @@ class Plotter(object):
         if self._show:
             plt.show()
 
-    def _N_fixed_g(self, g, N_list=None, hidden_size=-1, time=1.0):
+    def epochs(self, N, g, time=1.0, xmin=0.0, xmax=None, ymin=None, ymax=1.0):
+        assert self._nn_type == 'perceptron', 'Plotting scaling with epochs requires the perceptron classical optimizer'
+        
+        color = self._color_picker(N_lines=2)
+        marker = self._marker_picker(N_lines=2)
+        fig, axis = self._get_figure(N_figs=1)
+
+        self._N = N
+        self._g = g
+        self.load()
+        x = np.array( [i+1 for i in range(1, self._N_epochs+1)] )
+        
+        n = self._time_value_to_index(time)
+        for i, data in enumerate(['Training', 'Testing']):
+            accuracy, avg, std, mse, mae = self._data_picker(data=data)
+            y = accuracy[1:,n] # ignore the 0th epoch
+            
+            axis[0].plot(x, y, linestyle='None', clip_on=False, label=data, zorder = 10, color=color[i], marker=marker[i])
+            axis[0].plot(x, y, '-', clip_on=False, zorder = 10, color=color[i])
+    
+        xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
+        
+        axis[0].set_ylabel('Acc.')
+        axis[0].set_ylim(ymin=ymin, ymax=ymax)
+        axis[0].set_xlim(xmin=xmin, xmax=xmax)
+        axis[0].legend(frameon=False)
+        axis[0].set_xlabel('Epoch')
+        
+        title = f'{self._nn_type}     N = {N}     g = {g}     $\\alpha$ = {self._alpha}     time = {time}'
+        fig.suptitle(title)
+        
+        if self._save:
+            filename = f"{self._nn_type}_epochs_N_{self._N}_g_{self._g}_t_{time}"
+            plt.savefig(self._save_root+filename+'.pdf')
+
+        if self._show:
+            plt.show()
+    
+    def time(self, N, g, xmin=0.0, xmax=None, ymin=None, ymax=1.0):
+        color = self._color_picker(N_lines=2)
+        marker = self._marker_picker(N_lines=2)
+        fig, axis = self._get_figure(N_figs=1)
+
+        self._N = N
+        self._g = g
+        self.load()
+        x = self._tlist
+        
+        for i, data in enumerate(['Training', 'Testing']):
+            accuracy, avg, std, mse, mae = self._data_picker(data=data)
+            y = avg
+            y_err = std
+            
+            axis[0].plot(x, y, linestyle='None', clip_on=False, label=data, zorder = 10, color=color[i], marker=marker[i])
+            axis[0].plot(x, y, '-', clip_on=False, zorder = 10, color=color[i])
+            axis[0].fill_between(x, y-y_err, y+y_err, alpha=0.5, antialiased=True, color=color[i], linewidth=0.0)
+        
+        xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
+        
+        axis[0].set_ylabel('Acc.')
+        axis[0].set_ylim(ymin=ymin, ymax=ymax)
+        axis[0].set_xlim(xmin=xmin, xmax=xmax)
+        axis[0].legend(frameon=False)
+        axis[0].set_xlabel(r'$t J$')
+        
+        title = f'{self._nn_type}     N = {N}     g = {g}     $\\alpha$ = {self._alpha}'
+        fig.suptitle(title)
+        
+        if self._save:
+            filename = f"{self._nn_type}_time_N_{self._N}_g_{self._g}"
+            plt.savefig(self._save_root+filename+'.pdf')
+
+        if self._show:
+            plt.show()
+
+    def _N_fixed_g(self, g, N_list=None, time=1.0, xmin=None, xmax=None, ymin=None, ymax=None):
         if N_list is None:
             N_list = self._N_list
         
@@ -365,39 +420,38 @@ class Plotter(object):
         
         for i, data in enumerate(['Training', 'Testing']):
             y = np.empty(shape=len(x))
+            y_err = np.empty(shape=len(x))
             for j, self._N in enumerate(N_list):
-                nodes = self._nodes_picker(hidden_size, self._N)
                 self.load()
-                h = self._hidden_value_to_index(nodes)
                 n = self._time_value_to_index(time)
                 
-                accuracy, _, _ = self._data_picker(data=data)
-                y[j] = accuracy[h,n]
+                accuracy, avg, std, mse, mae = self._data_picker(data=data)
+                y[j] = avg[n]
+                y_err[j] = std[n]
             
             axis[0].plot(x, y, linestyle='None', clip_on=False, color=color[i], marker=marker[i], label=data, zorder=10)
             axis[0].plot(x, y, '-', clip_on=False, color=color[i], zorder=10)
+            axis[0].fill_between(x, y-y_err, y+y_err, alpha=0.5, antialiased=True, color=color[i], linewidth=0.0)
+        
+        xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
         
         axis[0].set_xlabel(r'$1/N$')
         axis[0].set_ylabel('Acc.')
-        #axis[0].set_ylim(ymin=0.7, ymax=1.0)
-        axis[0].set_ylim(ymax=1.0)
-        axis[0].set_xlim(xmin=0, xmax=np.max(x))
-        axis[0].legend(loc=4, frameon=False)
+        axis[0].set_ylim(ymin=ymin, ymax=ymax)
+        axis[0].set_xlim(xmin=xmin, xmax=xmax)
+        axis[0].legend(frameon=False)
         
-        if hidden_size < 0:
-            title = f'g = {g}     $\\alpha$ = {self._alpha}     nodes = $2^N$     t = {time}'
-        else:
-            title = f'g = {g}     $\\alpha$ = {self._alpha}     nodes = {hidden_size}     t = {time}'
+        title = f'{self._nn_type}     g = {g}     $\\alpha$ = {self._alpha}     t = {time}'
         fig.suptitle(title)
         
         if self._save:
-            filename = f"scaleN_g_{self._g}_h_{hidden_size}_t_{time}"
+            filename = f"{self._nn_type}_scaleN_g_{self._g}_t_{time}"
             plt.savefig(self._save_root+filename+'.pdf')
 
         if self._show:
             plt.show()
     
-    def _N_all(self, g_list=None, N_list=None, hidden_size=-1, time=1.0):
+    def _N_all(self, g_list=None, N_list=None, time=1.0, xmin=None, xmax=None, ymin=None, ymax=None):
         if g_list is None:
             g_list = self._g_list
         if N_list is None:
@@ -412,50 +466,48 @@ class Plotter(object):
         for i, data in enumerate(['Training', 'Testing']):
             for k, self._g in enumerate(g_list):
                 y = np.empty(shape=len(x))
+                y_err = np.empty(shape=len(x))
                 for j, self._N in enumerate(N_list):
-                    nodes = self._nodes_picker(hidden_size, self._N)
                     self.load()
-                    h = self._hidden_value_to_index(nodes)
                     n = self._time_value_to_index(time)
                     
-                    accuracy, _, _ = self._data_picker(data=data)
-                    y[j] = accuracy[h,n]
+                    accuracy, avg, std, mse, mae = self._data_picker(data=data)
+                    y[j] = avg[n]
+                    y_err[j] = std[n]
 
                 axis[i].plot(x, y, linestyle='None', clip_on=False, label=f'g = {self._g:.2f}', zorder = 10, color=color[k], marker=marker[k])
                 axis[i].plot(x, y, '-', clip_on=False, zorder = 10, color=color[k])
+                axis[i].fill_between(x, y-y_err, y+y_err, alpha=0.5, antialiased=True, color=color[k], linewidth=0.0)
+        
+        xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
         
         axis[0].set_ylabel('Training Acc.')
-        #axis[0].set_ylim(ymin=0.7, ymax=1.0)
-        axis[0].set_ylim(ymax=1.0)
-        #axis[0].set_xlim(xmin=0, xmax=np.max(x))
+        axis[0].set_ylim(ymin=ymin, ymax=ymax)
+        axis[0].set_xlim(xmin=xmin, xmax=xmax)
         
         axis[1].set_xlabel(r'$1/N$')
         axis[1].set_ylabel('Testing Acc.')
-        #axis[1].set_ylim(ymin=0.7, ymax=1.0)
-        axis[1].set_ylim(ymax=1.0)
-        #axis[1].set_xlim(xmin=0, xmax=np.max(x))
-        axis[1].legend(loc=4, frameon=False)
+        axis[1].set_ylim(ymin=ymin, ymax=ymax)
+        axis[1].set_xlim(xmin=xmin, xmax=xmax)
+        axis[1].legend(frameon=False)
         
-        if hidden_size < 0:
-            title = f'$\\alpha$ = {self._alpha}     nodes = $2^N$     t = {time}'
-        else:
-            title = f'$\\alpha$ = {self._alpha}     nodes = {hidden_size}     t = {time}'
+        title = f'{self._nn_type}     $\\alpha$ = {self._alpha}     t = {time}'
         fig.suptitle(title)
         
         if self._save:
-            filename = f"scaleN_h_{hidden_size}_t_{time}"
+            filename = f"{self._nn_type}_scaleN_t_{time}"
             plt.savefig(self._save_root+filename+'.pdf')
 
         if self._show:
             plt.show()
     
-    def N(self, g=None, g_list=None, N_list=None, hidden_size=-1, time=1.0):
+    def N(self, g=None, g_list=None, N_list=None, time=1.0, xmin=None, xmax=None, ymin=None, ymax=None):
         if g is None:
-            self._N_all(g_list=g_list, N_list=N_list, hidden_size=hidden_size, time=time)
+            self._N_all(g_list=g_list, N_list=N_list, time=time, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
         else:
-            self._N_fixed_g(g=g, N_list=N_list, hidden_size=hidden_size, time=time)
+            self._N_fixed_g(g=g, N_list=N_list, time=time, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
 
-    def _g_fixed_N(self, N, g_list=None, hidden_size=-1, time=1.0):
+    def _g_fixed_N(self, N, g_list=None, time=1.0, xmin=None, xmax=None, ymin=None, ymax=1.0):
         if g_list is None:
             g_list = self._g_list
         
@@ -463,45 +515,47 @@ class Plotter(object):
         marker = self._marker_picker(N_lines=2)
         fig, axis = self._get_figure(N_figs=1)
         
-        nodes = self._nodes_picker(hidden_size, N)
+        #nodes = self._nodes_picker(hidden_size, N)
         
         self._N = N
         x = g_list
 
         for i, data in enumerate(['Training', 'Testing']):
             y = np.empty(shape=len(x))
+            y_err = np.empty(shape=len(x))
             for j, self._g in enumerate(g_list):
                 self.load()
-                h = self._hidden_value_to_index(nodes)
+                #h = self._hidden_value_to_index(nodes)
                 n = self._time_value_to_index(time)
                 
-                accuracy, _, _ = self._data_picker(data=data)
-                y[j] = accuracy[h,n]
+                accuracy, avg, std, mse, mae = self._data_picker(data=data)
+                #y[j] = accuracy[h,n]
+                y[j] = avg[n]
+                y_err[j] = std[n]
         
             axis[0].plot(x, y, linestyle='None', clip_on=False, color=color[i], marker=marker[i], label=data, zorder=10)
             axis[0].plot(x, y, '-', clip_on=False, color=color[i], zorder=10)
+            axis[0].fill_between(x, y-y_err, y+y_err, alpha=0.5, antialiased=True, color=color[i], linewidth=0.0)
+        
+        xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
         
         axis[0].set_xlabel(r'$g / J$')
         axis[0].set_ylabel('Acc.')
-        #axis[0].set_ylim(ymin=0.7, ymax=1.0)
-        axis[0].set_ylim(ymax=1.0)
-        axis[0].set_xlim(xmin=np.min(x), xmax=np.max(x))
-        axis[0].legend(loc=4, frameon=False)
+        axis[0].set_ylim(ymin=ymin, ymax=ymax)
+        axis[0].set_xlim(xmin=xmin, xmax=xmax)
+        axis[0].legend(frameon=False)
         
-        if hidden_size < 0:
-            title = f'N = {N}     $\\alpha$ = {self._alpha}     nodes = $2^N$     t = {time}'
-        else:
-            title = f'N = {N}     $\\alpha$ = {self._alpha}     nodes = {nodes}     t = {time}'
+        title = f'{self._nn_type}     N = {N}     $\\alpha$ = {self._alpha}     t = {time}'
         fig.suptitle(title)
         
         if self._save:
-            filename = f"g_all_N_{self._N}_h_{nodes}_t_{time}"
+            filename = f"{self._nn_type}_g_all_N_{self._N}_t_{time}"
             plt.savefig(self._save_root+filename+'.pdf')
 
         if self._show:
             plt.show()
     
-    def _g_all_N(self, g_list=None, N_list=None, hidden_size=-1, time=1.0):
+    def _g_all_N(self, g_list=None, N_list=None, hidden_size=-1, time=1.0, xmin=None, xmax=None, ymin=None, ymax=1.0):
         if g_list is None:
             g_list = self._g_list
         if N_list is None:
@@ -515,46 +569,45 @@ class Plotter(object):
 
         for i, data in enumerate(['Training', 'Testing']):
             for k, self._N in enumerate(N_list):
-                nodes = self._nodes_picker(hidden_size, self._N)
                 y = np.empty(shape=len(x))
+                y_err = np.empty(shape=len(x))
                 for j, self._g in enumerate(g_list):
                     self.load()
-                    h = self._hidden_value_to_index(nodes)
                     n = self._time_value_to_index(time)
                     
-                    accuracy, _, _ = self._data_picker(data=data)
-                    y[j] = accuracy[h,n]
+                    accuracy, avg, std, mse, mae = self._data_picker(data=data)
+                    y[j] = avg[n]
+                    y_err[j] = std[n]
 
                 axis[i].plot(x, y, linestyle='None', clip_on=False, label=f'N = {self._N}', color=color[k], marker=marker[k], zorder=10)
                 axis[i].plot(x, y, '-', clip_on=False, color=color[k], zorder=10)
+                axis[i].fill_between(x, y-y_err, y+y_err, alpha=0.5, antialiased=True, color=color[k], linewidth=0.0)
+        
+        xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
         
         axis[0].set_ylabel('Training Acc.')
-        #axis[0].set_ylim(ymin=0.7, ymax=1.0)
-        axis[0].set_ylim(ymax=1.0)
-        axis[0].set_xlim(xmin=np.min(x), xmax=np.max(x))
-        axis[0].legend(loc=4, frameon=False)
+        axis[0].set_ylim(ymin=ymin, ymax=ymax)
+        axis[0].set_xlim(xmin=xmin, xmax=xmax)
+        axis[0].legend(frameon=False)
         
         axis[1].set_ylabel('Testing Acc.')
         #axis[1].set_ylim(ymin=0.7, ymax=1.0)
-        axis[1].set_ylim(ymax=1.0)
-        axis[1].set_xlim(xmin=np.min(x), xmax=np.max(x))
+        axis[1].set_ylim(ymin=ymin, ymax=ymax)
+        axis[1].set_xlim(xmin=xmin, xmax=xmax)
         axis[1].set_xlabel(r'$g / J$')
 
-        if hidden_size < 0:
-            title = f'$\\alpha$ = {self._alpha}     nodes = $2^N$     t = {time}'
-        else:
-            title = f'$\\alpha$ = {self._alpha}     nodes = {nodes}     t = {time}'
+        title = f'{self._nn_type}     $\\alpha$ = {self._alpha}     t = {time}'
         fig.suptitle(title)
         
         if self._save:
-            filename = f"g_all_h_{hidden_size}_t_{time}"
+            filename = f"{self._nn_type}_g_all_t_{time}"
             plt.savefig(self._save_root+filename+'.pdf')
 
         if self._show:
             plt.show()
     
-    def g(self, N=None, g_list=None, N_list=None, hidden_size=-1, time=1.0):
+    def g(self, N=None, g_list=None, N_list=None, time=1.0, xmin=None, xmax=None, ymin=None, ymax=1.0):
         if N is None:
-            self._g_all_N(g_list=g_list, N_list=N_list, hidden_size=hidden_size, time=time)
+            self._g_all_N(g_list=g_list, N_list=N_list, time=time, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
         else:
-            self._g_fixed_N(N=N, g_list=g_list, hidden_size=hidden_size, time=time)
+            self._g_fixed_N(N=N, g_list=g_list, time=time, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
