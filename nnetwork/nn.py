@@ -1,12 +1,49 @@
 import numpy as np
 from copy import deepcopy
 
+class Annealing(object):
+    def __init__(self, N_epochs, anneal_type='cosine', T_mult=2, T0_mult=0.05, eta_min=0, eta_max=1):
+        self.T_mult = T_mult
+        self.eta_min = eta_min
+        self.eta_max = eta_max
+
+        self.T_cur = 0
+        self.T = T0_mult * N_epochs # 1-10% of total budget is recommendation in cosine warm restart 
+        self.resets = 0 # i in the cosine warm restart
+        
+        self.eta = 0
+
+        if anneal_type == 'flat':
+            self.get_eta = self._get_flat
+        elif anneal_type == 'cosine':
+            self.get_eta = self._get_cosine
+        else:
+            raise ValueError("unrecognized annealing type !")
+
+    # cosine warm restart annealing is from Appendix B in arXiv:1711.05101v3
+    def _get_cosine(self):
+        self.eta = self.eta_min + 0.5 * (self.eta_max - self.eta_min) * (1.0 + np.cos(np.pi * self.T_cur / self.T))
+            
+        self.T_cur += 1
+
+        # Check restart
+        if self.T_cur >= self.T:
+            self.T_cur = 0
+            self.T *= self.T_mult
+            self.resets += 1
+            
+        return self.eta
+        
+    def _get_flat(self):
+        self.eta = 1.0
+        return self.eta
+
 # Adam is from arXiv:1412.6980v9
 class Adam(object):
-    def __init__(self, eta=0.001, beta_1=0.9, beta_2=0.999, eps=1e-7, use_nadam=False, use_amsgrad=True):
+    def __init__(self, alpha=0.001, beta_1=0.9, beta_2=0.999, eps=1e-7, use_nadam=False, use_amsgrad=True):
         self.beta_1 = beta_1 # RMSProp is if beta_1 = 0
         self.beta_2 = beta_2
-        self.eta = eta
+        self.alpha = alpha
         self.eps = eps
         
         # for using Nesterov momentum (in our data it makes very little difference)
@@ -20,7 +57,7 @@ class Adam(object):
         self.v = 0.0
         self.v_old = None
 
-    def apply_gradients(self, vars, dvars):
+    def apply_gradients(self, vars, dvars, eta=1.0):
         
         if self.use_amsgrad:
             # Store old second moment
@@ -40,13 +77,16 @@ class Adam(object):
         
         # Update direction to vars
         if self.use_nadam:
-            updates = (self.eta / (np.sqrt(v_bc) + self.eps)) * ( self.beta_1 * m_bc + (1.0 - self.beta_1)*dvars / (1.0 - self.beta_1**self.t) )
+            updates = (self.alpha / (np.sqrt(v_bc) + self.eps)) * ( self.beta_1 * m_bc + (1.0 - self.beta_1)*dvars / (1.0 - self.beta_1**self.t) )
         else:
-            updates = self.eta * m_bc / (np.sqrt(v_bc) + self.eps)
+            updates = self.alpha * m_bc / (np.sqrt(v_bc) + self.eps)
 
         # Here is where I would add weight decay for regularization, but it makes little difference
         # for such shallow networks
         # This part of the algorithm is AdamW
+
+        # Apply scheduler for learning
+        updates *= eta
         
         self.t += 1
         vars -= updates
@@ -55,8 +95,8 @@ class Adam(object):
 # AdaDelta is from arXiv:1212.5701v1
 # This has been adapted to be like Adam.
 class AdaDelta(object):
-    def __init__(self, eta=0.001, beta_1=0.9, beta_2=0.999, eps=1e-7, use_amsgrad=True):
-        self.eta = eta
+    def __init__(self, alpha=0.001, beta_1=0.9, beta_2=0.999, eps=1e-7, use_amsgrad=True):
+        self.alpha = alpha
         self.beta_1 = beta_1 # beta = 0 then becomes default Adadelta
         self.beta_2 = beta_2 # beta = 0 then becomes SGD/momentum
         self.eps = eps
@@ -70,10 +110,10 @@ class AdaDelta(object):
         self.v_old = None
         
         # To store rolling average of update weight
-        self.Ed = self.eta**2
+        self.Ed = self.alpha**2
         self.Ed_old = None
 
-    def apply_gradients(self, vars, dvars):
+    def apply_gradients(self, vars, dvars, eta=1.0):
         
         if self.use_amsgrad:
             # Store old second moment
@@ -99,6 +139,9 @@ class AdaDelta(object):
 
         if self.use_amsgrad:
             self.Ed = np.maximum(self.Ed, self.Ed_old)
+        
+        # Apply scheduler for learning
+        updates *= eta
 
         self.t += 1
         vars -= updates
@@ -107,47 +150,59 @@ class AdaDelta(object):
 # Nesterov accelerated gradient
 # Nesterov, Y. (1983). A method for unconstrained convex minimization problem with the rate of convergence o(1/k2).
 class NAG(object):
-    def __init__(self, eta=0.01, gamma=0.9, no_look_ahead=False):
-        self.eta = eta
+    def __init__(self, alpha=0.01, gamma=0.9, no_look_ahead=False):
+        self.alpha = alpha
         self.gamma = gamma
         self.no_look_ahead = no_look_ahead
         self.m = 0
         self.t = 1
 
-    def apply_gradients(self, vars, dvars):
+    def apply_gradients(self, vars, dvars, eta=1.0):
         # Get standard momentum update rule
-        self.m = self.gamma * self.m + self.eta*dvars
+        self.m = self.gamma * self.m + self.alpha*dvars
         
         # Apply Nesterov look ahead implementation
         if no_look_ahead:
             updates = self.m
         else:
-            updates = self.gamma * self.m + self.eta*dvars
+            updates = self.gamma * self.m + self.alpha*dvars
+        
+        # Apply scheduler for learning
+        updates *= eta
         
         self.t += 1
         vars -= updates
         return vars
 
 class SGD(object):
-    def __init__(self, eta=0.01):
-        self.eta = eta
+    def __init__(self, alpha=0.01):
+        self.alpha = alpha
         self.t = 1
 
-    def apply_gradients(self, vars, dvars):
+    def apply_gradients(self, vars, dvars, eta=1.0):
+        updates = self.alpha * dvars
+        
+        # Apply scheduler for learning
+        updates *= eta
+        
         self.t += 1
-        vars -= self.eta * dvars
+        vars -= updates
         return vars
 
 def weight_initializer(input_size, output_size, initializer='xavier'):
             
     rng = np.random.default_rng()
-    rand = rng.normal
+    normal = rng.normal
+    uniform = rng.uniform
 
-    # Weights usually get randomized to a value near zero 
+    # Weights usually get randomized to a value near zero
     if initializer == 'xavier':
-        weight = rand(0, 1, (output_size, input_size)) * np.sqrt(2.0/(input_size + output_size))
+        scale = np.sqrt(6.0/(input_size + output_size))
+        weight = uniform(low=-scale, high=scale, size=(output_size, input_size))
+    elif initializer == 'xavier2':
+        weight = normal(loc=0, scale=1, size=(output_size, input_size)) * np.sqrt(2.0/(input_size + output_size))
     elif initializer == 'he':
-        weight = rand(0, 1, (output_size, input_size)) * np.sqrt(1.0/(input_size))
+        weight = normal(loc=0, scale=1, size=(output_size, input_size)) * np.sqrt(1.0/(input_size))
     elif initializer == 'zeros':
         weight = np.zeros(shape=(output_size,input_size))
     else:
@@ -159,20 +214,20 @@ def weight_initializer(input_size, output_size, initializer='xavier'):
     return weight, bias
         
 # For applying gradient noise from arXiv:1511.06807v1 (makes very little difference for shallow networks like ours)
-def gradient_noise(dvars, t, eta=0.01, gamma=0.55):
-    # parameters from their eq. 1 eta in (0.01, 0.3, 1), gamma=0.55
+def gradient_noise(dvars, t, alpha=0.01, gamma=0.55):
+    # parameters from their eq. 1 alpha in (0.01, 0.3, 1), gamma=0.55
     rng = np.random.default_rng()
     rand = rng.normal
-    variance = eta / (1.0 + t)**gamma
+    variance = alpha / (1.0 + t)**gamma
     noise = rand(0,var,dvars.shape)
     dvars += noise
     return dvars
 
 # Weight decay for L2 regularization from arXiv:1711.05101v3
-def weight_decay(updates, eta, vars, N_batch, N_samples, N_epochs):
-    w = 0.5*0.001 # some initial guess from their Fig.1,2
-    w *= np.sqrt(N_batch/(N_samples*N_epochs))
-    updates += eta * w * vars
+def weight_decay(updates, vars, N_batch, N_samples, N_epochs):
+    lambdaa = 0.25*0.001 # some initial guess from their Fig.1,2
+    lambdaa *= np.sqrt(N_batch/(N_samples*N_epochs)) # their renormalized value from appendix
+    updates += lambdaa * vars
     return updates
 
 class NeuralNetwork(object):
@@ -185,6 +240,10 @@ class NeuralNetwork(object):
         A = x.max(axis=-1)
         return A + np.log(np.sum(np.exp(x - A[:,None]), axis=-1))
 
+    def _sum_exp(self, x):
+        e = np.exp(x - np.max(x, axis=-1)[:,None])
+        return e / np.sum(e, axis=-1, keepdims=True)
+
     def activation_function(self, x):
         if self._activation == 'softmax':
             u = x @ self._weight.T + self._bias
@@ -193,8 +252,7 @@ class NeuralNetwork(object):
             #u -= lower[:,None]
             #return np.exp(u)
 
-            e = np.exp(u - np.max(u, axis=-1)[:,None])
-            return e / np.sum(e, axis=-1, keepdims=True)
+            return self._sum_exp(u)
 
         elif self._activation == 'sigmoid':
             u = x @ self._weight.T + self._bias
@@ -233,7 +291,7 @@ class NeuralNetwork(object):
         return np.sum( - np.sum(y * np.log(y_pred), axis=-1) ) / y.shape[0]
         #return np.sum(np.log( np.prod(np.exp(-y) * y_pred, axis=-1) )) / y.shape[0]
 
-    def evaluate(self, y_pred, y, x_entropy=False):
+    def evaluate(self, y_pred, y, calc_cross_entropy=False):
         # Majority vote for 1 hot vectors
         y_pred_trunc = np.argmax(y_pred, axis=-1)
         y_trunc = np.argmax(y, axis=-1)
@@ -242,9 +300,9 @@ class NeuralNetwork(object):
         mse = np.mean((y_pred - y)**2)
         mae = np.mean(np.abs(y_pred - y))
         
-        if x_entropy:
-            x_entropy = self.cross_entropy(y_pred=y_pred, y=y)
-            return accuracy, mse, mae, x_entropy
+        if calc_cross_entropy:
+            cross_entropy = self.cross_entropy(y_pred=y_pred, y=y)
+            return accuracy, mse, mae, cross_entropy
         return accuracy, mse, mae
         
     def onehot_y(self, y_train, y_test, M=10, binarizer=True):      

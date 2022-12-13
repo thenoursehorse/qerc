@@ -2,6 +2,7 @@ from pathlib import Path
 import argparse
 from distutils.util import strtobool
 from timeit import default_timer as timer
+from itertools import product
 
 import numpy as np
 
@@ -34,10 +35,11 @@ if __name__ == '__main__':
         default='adam',
     )
     parser.add_argument('-initializer',
-        choices=['xavier', 'he', 'zeros'],
+        choices=['xavier', 'xavier2', 'he', 'zeros'],
         default='xavier',
     )
     parser.add_argument('-N_epochs', type=int, default=100)
+    parser.add_argument('-num_realizations', type=int, default=5)
     parser.add_argument('-stats_stride', type=int, default=10)
     parser.add_argument('-M', type=int, default=100)
     parser.add_argument('-eta', type=float, default=0.001)
@@ -127,23 +129,26 @@ if __name__ == '__main__':
     # There are 10 categories for MNIST
     output_size = 10
 
-    accuracy_train = np.empty(shape=(args.N_epochs+1, Nt))
-    accuracy_test = np.empty(shape=(args.N_epochs+1, Nt))
-    mse_train = np.empty(shape=(args.N_epochs+1, Nt))
-    mse_test = np.empty(shape=(args.N_epochs+1, Nt))
-    mae_train = np.empty(shape=(args.N_epochs+1, Nt))
-    mae_test = np.empty(shape=(args.N_epochs+1, Nt))
-    #x_entropy_train = np.empty(shape=(args.N_epochs+1, Nt))
-    #x_entropy_test = np.empty(shape=(args.N_epochs+1, Nt))
+    accuracy_train = np.empty(shape=(args.N_epochs+1, Nt, args.num_realizations))
+    accuracy_test = np.empty(shape=(args.N_epochs+1, Nt, args.num_realizations))
+    mse_train = np.empty(shape=(args.N_epochs+1, Nt, args.num_realizations))
+    mse_test = np.empty(shape=(args.N_epochs+1, Nt, args.num_realizations))
+    mae_train = np.empty(shape=(args.N_epochs+1, Nt, args.num_realizations))
+    mae_test = np.empty(shape=(args.N_epochs+1, Nt, args.num_realizations))
+    cross_entropy_train = np.empty(shape=(args.N_epochs+1, Nt, args.num_realizations))
+    cross_entropy_test = np.empty(shape=(args.N_epochs+1, Nt, args.num_realizations))
 
     avg_train = np.empty(shape=(Nt))
-    std_train = np.empty(shape=(Nt))
-    best_train = np.empty(shape=(Nt))
     avg_test = np.empty(shape=(Nt))
+    std_train = np.empty(shape=(Nt))
     std_test = np.empty(shape=(Nt))
-    best_test = np.empty(shape=(Nt))
     
-    for n in range(Nt):
+    best_train = np.empty(shape=(Nt, args.num_realizations))
+    best_test = np.empty(shape=(Nt, args.num_realizations))
+    
+    for n, q in product(range(Nt), range(args.num_realizations)):
+        print(f"time n = {n+1}/{Nt}, realization q = {q+1}/{args.num_realizations} perceptron:")
+        
         # Take a time slice, indexed as time,sample,inputnode
         x_train = x_train_all[n,:args.N_samples_train,:]
         x_test = x_test_all[n,:args.N_samples_test,:]
@@ -153,7 +158,7 @@ if __name__ == '__main__':
                                 N_epochs=args.N_epochs,
                                 activation=args.activation,
                                 M=args.M,
-                                eta=args.eta,
+                                alpha=args.eta,
                                 beta_1=args.beta_1,
                                 beta_2=args.beta_2,
                                 shuffle=args.shuffle,
@@ -171,30 +176,38 @@ if __name__ == '__main__':
         start = timer()
         y_train_pred, y_test_pred = perceptron.train(x_train=x_train, x_test=x_test, y_train=y_train, y_test=y_test)
         end = timer()
-        print(f"n = {n+1}/{Nt} perceptron took:", end-start)
+        print("took:", end-start)
 
-        accuracy_train[:,n] = perceptron.accuracy_train 
-        mse_train[:,n] = perceptron.mse_train 
-        mae_train[:,n] = perceptron.mae_train 
-        #x_entropy_train[:,n] = perceptron.x_entropy_train
-        avg_train[n] = np.mean(accuracy_train[-args.stats_stride:-1,n])
-        std_train[n] = np.std(accuracy_train[-args.stats_stride:-1,n])
-        best_train[n] = np.max(accuracy_train[:,n])
-        print("Training accuracy mean: ", avg_train[n])
-        print("Training accuracy std: ", std_train[n])
-        print("Training best: ", best_train[n])
+        accuracy_train[:,n,q] = perceptron.accuracy_train 
+        mse_train[:,n,q] = perceptron.mse_train 
+        mae_train[:,n,q] = perceptron.mae_train 
+        cross_entropy_train[:,n,q] = perceptron.cross_entropy_train
+        best_train[n,q] = np.max(accuracy_train[:,n,q])
+        print("Training accuracy mean: ", np.mean(accuracy_train[-args.stats_stride:-1,n,q]))
+        print("Training best: ", best_train[n,q])
+        print("Training cross_entropy mean: ", np.mean(cross_entropy_train[-args.stats_stride:-1,n,q]) )
 
-        accuracy_test[:,n] = perceptron.accuracy_test
-        mse_test[:,n] = perceptron.mse_test
-        mae_test[:,n] = perceptron.mae_test
-        #x_entropy_test[:,n] = perceptron.x_entropy_test
-        avg_test[n] = np.mean(accuracy_test[-args.stats_stride:-1,n])
-        std_test[n] = np.std(accuracy_test[-args.stats_stride:-1,n])
-        best_test[n] = np.max(accuracy_test[:,n])
-        print("Testing accuracy mean: ", avg_test[n])
-        print("Testing accuracy std: ", std_test[n])
-        print("Testing best: ", best_test[n])
+        accuracy_test[:,n,q] = perceptron.accuracy_test
+        mse_test[:,n,q] = perceptron.mse_test
+        mae_test[:,n,q] = perceptron.mae_test
+        cross_entropy_test[:,n,q] = perceptron.cross_entropy_test
+        best_test[n,q] = np.max(accuracy_test[:,n,q])
+        print("Testing accuracy mean: ", np.mean(accuracy_test[-args.stats_stride:-1,n,q]))
+        print("Testing best: ", best_test[n,q])
+        print("Testing cross_entropy mean: ", np.mean(cross_entropy_test[-args.stats_stride:-1,n,q]) )
         print()
+
+        if q == (args.num_realizations - 1):
+            avg_train[n] = np.mean(accuracy_train[-args.stats_stride:-1,n,:])
+            avg_test[n] = np.mean(accuracy_test[-args.stats_stride:-1,n,:])
+            std_train[n] = np.std(accuracy_train[-args.stats_stride:-1,n,:])
+            std_test[n] = np.std(accuracy_test[-args.stats_stride:-1,n,:])
+            print(f"Averages for time n = {n+1}/{Nt}:")
+            print("Training mean: ", avg_train[n])
+            print("Testing mean: ", avg_test[n])
+            print("Training std: ", std_train[n])
+            print("Testing std: ", std_test[n])
+            print()
         
     if args.save:
         from nnetwork.nndata import NNData
@@ -212,8 +225,8 @@ if __name__ == '__main__':
                         mse_test=mse_test,
                         mae_train=mae_train,
                         mae_test =mae_test,
-                        #x_entropy_train=x_entropy_train,
-                        #x_entropy_test=x_entropy_test,
+                        cross_entropy_train=cross_entropy_train,
+                        cross_entropy_test=cross_entropy_test,
                         avg_train=avg_train,
                         avg_test=avg_test,
                         std_train=std_train,
@@ -230,6 +243,7 @@ if __name__ == '__main__':
                         node_type=args.node_type,
                         standardize=args.standardize,
                         N_epochs=args.N_epochs,
+                        num_realizations=args.num_realizations,
                         stats_stride=args.stats_stride,
                         M=args.M,
                         eta=args.eta,

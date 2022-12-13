@@ -1,14 +1,14 @@
 import numpy as np
 from copy import deepcopy
-from .nn import NeuralNetwork, AdaDelta, Adam, NAG, SGD, weight_initializer
+from .nn import NeuralNetwork, AdaDelta, Adam, NAG, SGD, weight_initializer, Annealing
         
 class Perceptron(NeuralNetwork):
-    def __init__(self, output_size, N_epochs=100, M=32, eta=0.001, beta_1=0.9, beta_2=0.999, eps=1e-7, optimizer='adam', initializer='xavier', shuffle=True, **kwargs):
+    def __init__(self, output_size, N_epochs=100, M=32, alpha=0.001, beta_1=0.9, beta_2=0.999, eps=1e-7, optimizer='adam', initializer='xavier', shuffle=True, **kwargs):
         self._output_size = output_size
         self._N_epochs = N_epochs
         # Minibatch number. M = 1 is stochastic gradient descent (SGD), M = -1 batch gradient descent (BGD)
         self._M = M
-        self._eta = eta
+        self._alpha = alpha
         self._beta_1 = beta_1
         self._beta_2 = beta_2
         self._eps = eps
@@ -24,20 +24,17 @@ class Perceptron(NeuralNetwork):
 
         # Initialize optimizer
         if self._optimizer == 'adam':
-            # good defaults are eta=0.001, beta_1=0.9, beta_2=0.999, eps=1e-7
-            self._optimizer_w = Adam(eta=self._eta, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
-            self._optimizer_b = Adam(eta=self._eta, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
+            self._optimizer_w = Adam(alpha=self._alpha, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
+            self._optimizer_b = Adam(alpha=self._alpha, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
         elif self._optimizer == 'adadelta':
-            # good defaults are eta=0.01, rho=0.99, eps=1e-6
-            self._optimizer_w = AdaDelta(eta=self._eta, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
-            self._optimizer_b = AdaDelta(eta=self._eta, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
+            self._optimizer_w = AdaDelta(alpha=self._alpha, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
+            self._optimizer_b = AdaDelta(alpha=self._alpha, beta_1=self._beta_1, beta_2=self._beta_2, eps=self._eps)
         elif self._optimizer == 'nag':
-            # good defaults are eta=0.01, rho=0.9
-            self._optimizer_w = NAG(eta=self._eta, gamma=self._beta_1)
-            self._optimizer_b = NAG(eta=self._eta, gamma=self._beta_1)
+            self._optimizer_w = NAG(alpha=self._alpha, gamma=self._beta_1)
+            self._optimizer_b = NAG(alpha=self._alpha, gamma=self._beta_1)
         elif self._optimizer == 'sgd':
-            self._optimizer_w = SGD(eta=self._eta)
-            self._optimizer_b = SGD(eta=self._eta)
+            self._optimizer_w = SGD(alpha=self._alpha)
+            self._optimizer_b = SGD(alpha=self._alpha)
         else:
             raise ValueError(f'unknown activation optimizer {self._optimizer}.')
 
@@ -48,8 +45,13 @@ class Perceptron(NeuralNetwork):
         self._mse_test = np.empty(shape=self._N_epochs+1)
         self._mae_train = np.empty(shape=self._N_epochs+1)
         self._mae_test = np.empty(shape=self._N_epochs+1)
-        self._losses_train = np.empty(shape=self._N_epochs+1)
-        self._losses_test = np.empty(shape=self._N_epochs+1)
+        self._cross_entropy_train = np.empty(shape=self._N_epochs+1)
+        self._cross_entropy_test = np.empty(shape=self._N_epochs+1)
+        
+        # FIXME not really implemented properly yet (and likely won't work well for such a simple network)
+        #self.annealer = Annealing(N_epochs=self._N_epochs)
+        #self.annealer = Annealing(N_epochs=self._N_epochs, T_mult=1, T0_mult=20)
+        self.annealer = Annealing(N_epochs=self._N_epochs, anneal_type='flat')
            
     # [deriv]_ij = [X.T (Y_pred - Y)]_ij / N_samples
     def weight_deriv(self, x, y_pred, y, M):
@@ -75,9 +77,14 @@ class Perceptron(NeuralNetwork):
             
             # Record data at end of epoch
             y_train_pred = self.predict(x_train)
-            self._accuracy_train[i], self._mse_train[i], self._mae_train[i] = self.evaluate(y_pred=y_train_pred, y=y_train)
+            #self._accuracy_train[i], self._mse_train[i], self._mae_train[i] = self.evaluate(y_pred=y_train_pred, y=y_train)
+            self._accuracy_train[i], self._mse_train[i], self._mae_train[i], self._cross_entropy_train[i] = self.evaluate(y_pred=y_train_pred, y=y_train, calc_cross_entropy=True)
             y_test_pred = self.predict(x_test)
-            self._accuracy_test[i], self._mse_test[i], self._mae_test[i] = self.evaluate(y_pred=y_test_pred, y=y_test)
+            #self._accuracy_test[i], self._mse_test[i], self._mae_test[i] = self.evaluate(y_pred=y_test_pred, y=y_test)
+            self._accuracy_test[i], self._mse_test[i], self._mae_test[i], self._cross_entropy_test[i] = self.evaluate(y_pred=y_test_pred, y=y_test, calc_cross_entropy=True)
+
+            # Scheduler
+            eta = self.annealer.get_eta()
 
             # Shuffle data
             if self._shuffle:
@@ -103,14 +110,16 @@ class Perceptron(NeuralNetwork):
                 b_deriv = self.bias_deriv(y_pred=y_train_pred_copy, y=y_train_copy, M=M)
 
                 # Update weight and bias
-                self._weight = self._optimizer_w.apply_gradients(vars=self._weight, dvars=w_deriv)
-                self._bias = self._optimizer_b.apply_gradients(vars=self._bias, dvars=b_deriv)
+                self._weight = self._optimizer_w.apply_gradients(vars=self._weight, dvars=w_deriv, eta=eta)
+                self._bias = self._optimizer_b.apply_gradients(vars=self._bias, dvars=b_deriv, eta=eta)
 
         # Record data of final iteration    
         y_train_pred = self.predict(x_train)
-        self._accuracy_train[-1], self._mse_train[-1], self._mae_train[-1] = self.evaluate(y_pred=y_train_pred, y=y_train)
+        #self._accuracy_train[-1], self._mse_train[-1], self._mae_train[-1] = self.evaluate(y_pred=y_train_pred, y=y_train)
+        self._accuracy_train[-1], self._mse_train[-1], self._mae_train[-1], self._cross_entropy_train[-1] = self.evaluate(y_pred=y_train_pred, y=y_train, calc_cross_entropy=True)
         y_test_pred = self.predict(x_test)
-        self._accuracy_test[-1], self._mse_test[-1], self._mae_test[-1] = self.evaluate(y_pred=y_test_pred, y=y_test)
+        #self._accuracy_test[-1], self._mse_test[-1], self._mae_test[-1] = self.evaluate(y_pred=y_test_pred, y=y_test)
+        self._accuracy_test[-1], self._mse_test[-1], self._mae_test[-1], self._cross_entropy_test[-1] = self.evaluate(y_pred=y_test_pred, y=y_test, calc_cross_entropy=True)
         return y_train_pred, y_test_pred
     
     def predict(self, x):
@@ -145,9 +154,9 @@ class Perceptron(NeuralNetwork):
         return self._mae_test
     
     @property
-    def losses_train(self):
-        return self._losses_train
+    def cross_entropy_train(self):
+        return self._cross_entropy_train
 
     @property 
-    def losses_test(self):
-        return self._losses_test
+    def cross_entropy_test(self):
+        return self._cross_entropy_test
