@@ -1,11 +1,23 @@
 #!/bin/bash
 
 N_arr=$(seq 5 11)
-#g_arr=$(seq 0.90 0.01 1.1)
-#g_arr=$(seq 0 0.1 2)
-g_arr=$(seq 0 0.5 5)
-#alpha_arr=(1.51 10000)
-alpha_arr=(1.51)
+
+#model='ising'
+model='xyz'
+export model
+
+if [ ${model} = "ising" ]; then
+  g_arr=$(seq 0 0.1 5)
+  g_arr_zoom=$(seq 0.91 0.01 1.09)
+  g_arr+=( ${g_arr_zoom[@]} )
+  alpha_arr=(1.51 10000)
+elif [ ${model} = "xyz" ]; then
+  alpha_arr=$(seq -2 0.1 2)
+  g_arr=(0)
+else
+  echo "Unknown model selection !"
+  exit 1
+fi
 
 # for N=10 can use about 3.5% of memory on this workstation
 njobs=10
@@ -17,7 +29,6 @@ source $HOME/venv/qutip_qist/bin/activate
 # Export so child processes can see variables
 export exec_folder=$HOME/GitHub/qerc
 export filename_root=/scratch/NemotoU/henry/qerc/data/
-export model='ising'
 export dt=0.5
 export tf=5
 export hsize_initial=500
@@ -65,10 +76,10 @@ elm() {
 	  &> ${outfile}
 
     
-  python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
-	  -hsize_initial ${hsize_initial} -hsize_final ${hsize_final} -hsize_step ${hsize_step} \
-	  -filename_root ${filename_root} -model ${model} -node_type 'psi' \
-	  &>> ${outfile}
+  #python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
+	#  -hsize_initial ${hsize_initial} -hsize_final ${hsize_final} -hsize_step ${hsize_step} \
+	#  -filename_root ${filename_root} -model ${model} -node_type 'psi' \
+	#  &>> ${outfile}
 
     
   #python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
@@ -90,10 +101,10 @@ identity() {
 	  -filename_root ${filename_root} -model ${model} -node_type 'rho_diag' \
 	  &>> ${outfile}
 
-  python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
-          -activation 'identity' -standardize 'False' -pinv 'numpy' \
-	  -filename_root ${filename_root} -model ${model} -node_type 'psi' \
-	  &>> ${outfile}
+  #python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
+  #        -activation 'identity' -standardize 'False' -pinv 'numpy' \
+	#  -filename_root ${filename_root} -model ${model} -node_type 'psi' \
+	#  &>> ${outfile}
   
   #python3 -u ${exec_folder}/mnist_elm.py -N ${N} -g ${g} -alpha ${alpha} \
   #        -activation 'identity' -standardize 'True' -pinv 'numpy' \
@@ -113,9 +124,9 @@ perceptron() {
           -filename_root ${filename_root} -model ${model} -node_type 'rho_diag' \
           &> ${outfile}
 
-  python3 -u ${exec_folder}/mnist_perceptron.py -N ${N} -g ${g} -alpha ${alpha} \
-          -filename_root ${filename_root} -model ${model} -node_type 'psi' \
-          &>> ${outfile}
+  #python3 -u ${exec_folder}/mnist_perceptron.py -N ${N} -g ${g} -alpha ${alpha} \
+  #        -filename_root ${filename_root} -model ${model} -node_type 'psi' \
+  #        &>> ${outfile}
 
   #python3 -u ${exec_folder}/mnist_perceptron.py -N ${N} -g ${g} -alpha ${alpha} \
   #        -filename_root ${filename_root} -model ${model} -node_type 'corr' \
@@ -130,6 +141,6 @@ parallel -j${njobs} --memsuspend 2G evolve ::: "${alpha_arr[@]}" ::: "${N_arr[@]
 
 parallel -j${njobs} --memsuspend 2G perceptron ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
 
-parallel -j${njobs} --memsuspend 2G identity ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
+#parallel -j${njobs} --memsuspend 2G identity ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"
 
 #parallel -j${njobs} --memsuspend 2G elm ::: "${alpha_arr[@]}" ::: "${N_arr[@]}" ::: "${g_arr[@]}"

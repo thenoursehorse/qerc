@@ -190,7 +190,6 @@ class SGD(object):
         return vars
 
 def weight_initializer(input_size, output_size, initializer='xavier'):
-            
     rng = np.random.default_rng()
     normal = rng.normal
     uniform = rng.uniform
@@ -231,6 +230,22 @@ def weight_decay(updates, vars, N_batch, N_samples, N_epochs):
     return updates
 
 class NeuralNetwork(object):
+    '''
+    Base class for a single-layer neural network (perceptron or 
+    extreme-learning machine).
+
+    Args:
+        input_size : Size of x arrays for each sample. x encodes information 
+            about the sample.
+
+        activation : (Default 'softmax') The activation function of the
+            hidden nodes. Options are 'softmax', 'sigmoid', 'hyperbolic',
+            'hard', 'cos', and 'identity'. For perceptron only 'softmax' 
+            is allowed.
+
+        identity_bias : (Default True) When the activation function is the 
+            identity, the bias makes the psuedo-inverse faster.
+    '''
     def __init__(self, input_size, activation='softmax', identity_bias=True):
         self._input_size = input_size
         self._activation = activation
@@ -245,6 +260,15 @@ class NeuralNetwork(object):
         return e / np.sum(e, axis=-1, keepdims=True)
 
     def activation_function(self, x):
+        '''
+        Activation function (single-layer) of neural network.
+
+        Args:
+            x : An array of encoded data for a single sample.
+
+        Returns:
+            Result of layer.
+        '''
         if self._activation == 'softmax':
             u = x @ self._weight.T + self._bias
 
@@ -292,6 +316,28 @@ class NeuralNetwork(object):
         #return np.sum(np.log( np.prod(np.exp(-y) * y_pred, axis=-1) )) / y.shape[0]
 
     def evaluate(self, y_pred, y, calc_cross_entropy=False):
+        '''
+        Evaluate predicted outputs compared to known outputs.
+
+        Args:
+            y_pred : Perceptrons guess at classifying (first index labels 
+                sample).
+
+            y : Correct classification (first index labels sample).
+
+            calc_cross_entropy : (Default False) Whether to calculate cross 
+                entropy loss function.
+
+        Returns:
+            accuracy : Proportion of correct predictions. Assumes majority 
+                vote of onehot vectors.
+
+            mse : mean-squared error.
+
+            mae : mean-absolute error.
+
+            cross_entropy : cross entropy loss function.
+        '''
         # Majority vote for 1 hot vectors
         y_pred_trunc = np.argmax(y_pred, axis=-1)
         y_trunc = np.argmax(y, axis=-1)
@@ -305,7 +351,25 @@ class NeuralNetwork(object):
             return accuracy, mse, mae, cross_entropy
         return accuracy, mse, mae
         
-    def onehot_y(self, y_train, y_test, M=10, binarizer=True):      
+    def onehot_y(self, y_train, y_test, M=10, binarizer=True):
+        '''
+        Create one-hot vectors of classifying data.
+
+        Args:
+            y_train : An array of training samples where the value is the 
+                label.
+            
+            y_test : An array of testing samples where the value is the 
+                label.
+
+            M : (Default 10 for MNIST) Number of categories.
+
+            binarizer : (Default True) Whether to use sklearn LabelBinarizer.
+                If True then parameter M is not used.
+
+        Returns:
+            y_train, y_test as one-hot vectors.
+        '''
         # Use sklearn binarizer to make one hot vectors
         if binarizer:
             from sklearn.preprocessing import LabelBinarizer
@@ -330,6 +394,22 @@ class NeuralNetwork(object):
             return T_train, T_test
         
     def standardize(self, x_train, x_test, individual=True):
+        '''
+        Whether to standardize the samples to zero mean and one standard 
+        deviation.
+
+        Args:
+            x_train : Input array of training data (first index labels sample).
+            
+            x_test : Input array of testing data (first index labels sample).
+
+            individual : (Default True) If True standardize each sample 
+                individually. If False uses StandardScalar from sklearn to 
+                standardize entire data set.
+
+        Returns:
+            x_trian, x_test standardized.
+        '''
         if individual:
             # Standardize each sample to individually have mean 0 and std deviation 1
             x_train = ( x_train - np.mean(x_train, axis=-1, keepdims=True) ) / ( np.std(x_train, axis=-1, keepdims=True) + 1e-10 )
@@ -355,8 +435,16 @@ class NeuralNetwork(object):
     
     @property
     def weight(self):
+        '''
+        Weights of the single-layer neural network. Arrays indexed as
+        (output_size, input_size).
+        '''
         return self._weight
     
     @property
     def bias(self):
+        '''
+        Bias of the single-layer neural network. Arrays indexed as
+        (output_size).
+        '''
         return self._bias        

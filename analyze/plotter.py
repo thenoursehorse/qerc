@@ -16,6 +16,16 @@ plt.rcParams.update({
     'lines.linewidth' : 1,
 })
 
+# From https://stackoverflow.com/a/59543988
+class FigureWrapper(object):
+    '''Frees underlying figure when it goes out of scope. 
+    '''
+    def __init__(self, figure):
+        self._figure = figure
+
+    def __del__(self):
+        plt.close(self._figure)
+
 class Plotter(object):
     def __init__(self, g_list, 
                        N_list, 
@@ -275,6 +285,7 @@ class Plotter(object):
         color = self._color_picker(N_lines=2)
         marker = self._marker_picker(N_lines=2)
         fig, axis = self._get_figure(N_figs=2)
+        _wrapped_figure = FigureWrapper(fig)
 
         self._N = N
         self._g = g
@@ -338,16 +349,17 @@ class Plotter(object):
         color = self._color_picker(N_lines=2)
         marker = self._marker_picker(N_lines=2)
         fig, axis = self._get_figure(N_figs=1)
+        _wrapped_figure = FigureWrapper(fig)
 
         self._N = N
         self._g = g
         self.load()
-        x = np.array( [i+1 for i in range(1, self._N_epochs+1)] )
+        x = np.array( [i+1 for i in range(1, self._N_epochs+1)] ) # ignore the 0th epoch
         
         n = self._time_value_to_index(time)
         for i, data in enumerate(['Training', 'Testing']):
             accuracy, avg, std, mse, mae = self._data_picker(data=data)
-            y = accuracy[1:,n] # ignore the 0th epoch
+            y = accuracy[1:,n,0] # ignore the 0th epoch, only take 1 realiziation to show trend
             
             axis[0].plot(x, y, linestyle='None', clip_on=False, label=data, zorder = 10, color=color[i], marker=marker[i])
             axis[0].plot(x, y, '-', clip_on=False, zorder = 10, color=color[i])
@@ -374,6 +386,7 @@ class Plotter(object):
         color = self._color_picker(N_lines=2)
         marker = self._marker_picker(N_lines=2)
         fig, axis = self._get_figure(N_figs=1)
+        _wrapped_figure = FigureWrapper(fig)
 
         self._N = N
         self._g = g
@@ -414,6 +427,7 @@ class Plotter(object):
         color = self._color_picker(N_lines=2)
         marker = self._marker_picker(N_lines=2)
         fig, axis = self._get_figure(N_figs=1)
+        _wrapped_figure = FigureWrapper(fig)
 
         x = 1.0/N_list
         self._g = g
@@ -460,6 +474,7 @@ class Plotter(object):
         color = self._color_picker(N_lines=len(g_list))
         marker = self._marker_picker(N_lines=len(g_list))
         fig, axis = self._get_figure(N_figs=2)
+        _wrapped_figure = FigureWrapper(fig)
         
         x = 1.0/N_list
 
@@ -514,6 +529,7 @@ class Plotter(object):
         color = self._color_picker(N_lines=2)
         marker = self._marker_picker(N_lines=2)
         fig, axis = self._get_figure(N_figs=1)
+        _wrapped_figure = FigureWrapper(fig)
         
         #nodes = self._nodes_picker(hidden_size, N)
         
@@ -564,6 +580,7 @@ class Plotter(object):
         color = self._color_picker(N_lines=len(N_list))
         marker = self._marker_picker(N_lines=len(N_list))
         fig, axis = self._get_figure(N_figs=2)
+        _wrapped_figure = FigureWrapper(fig)
         
         x = g_list
 

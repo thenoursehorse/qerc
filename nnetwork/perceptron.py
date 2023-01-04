@@ -3,6 +3,36 @@ from copy import deepcopy
 from .nn import NeuralNetwork, AdaDelta, Adam, NAG, SGD, weight_initializer, Annealing
         
 class Perceptron(NeuralNetwork):
+    '''
+    Single-layer perceptron.
+
+    Args:
+        input_size : Size of input nodes.
+
+        output_size : Size of output nodes.
+
+        N_epochs : (Default 100) Number of iterations through the entire 
+            training set.
+
+        alpha : (Default 0.001) Learning rate hyperparameter.
+
+        beta_1 : (Default 0.9) First moment derivitive mixing parameter. This 
+            is the momentum hyperparameter.
+
+        beta_2 : (Default 0.999) Second momentum derivitive mixing parameter. 
+        
+        eps : (Default 1e-7) Hyperparameter to prevent divide by zeros.
+
+        optimizer : (Default 'adam') Optimization algorithm. Options are 
+            'adam', 'adadelta', 'nag' Nesterov accelerated gradient, 
+            'sgd' stochastic gradient descent.
+
+        initializer : (Default 'xavier') Initialization scheme of weights for 
+            nodes. Options are 'xavier', 'he', and 'zeros'.
+
+        shuffle : (Default True) Whether to shuffle the training set at the 
+            start of each epoch.
+    '''
     def __init__(self, output_size, N_epochs=100, M=32, alpha=0.001, beta_1=0.9, beta_2=0.999, eps=1e-7, optimizer='adam', initializer='xavier', shuffle=True, **kwargs):
         self._output_size = output_size
         self._N_epochs = N_epochs
@@ -55,13 +85,82 @@ class Perceptron(NeuralNetwork):
            
     # [deriv]_ij = [X.T (Y_pred - Y)]_ij / N_samples
     def weight_deriv(self, x, y_pred, y, M):
+        '''
+        Analytic derivitive of cross entropy w.r.t. the weight.
+
+        Args:
+            x : Input array of some sample (first index labels sample).
+
+            y_pred : Perceptrons guess at classifying (first index labels 
+                sample).
+
+            y : Correct classification (first index labels sample).
+
+            M : Batch size (number of samples in this batch).
+
+        Returns:
+            Derivative dL/dw.
+        '''
         return (x.T @ (y_pred - y)).T / M
 
     # [deriv]_j = \sum_k [Y_pred - Y]_j / N_samples
     def bias_deriv(self, y_pred, y, M):
+        '''
+        Analytic derivitive of cross entropy w.r.t. the bias.
+        
+        Args:
+            y_pred : Perceptrons guess at classifying (first index labels 
+                sample).
+
+            y : Correct classification (first index labels sample).
+
+            M : Batch size (number of samples in this batch).
+
+        Returns:
+            Derivative dL/db.
+        '''
         return np.sum(y_pred - y, axis=0) / M
 
     def train(self, x_train, x_test, y_train, y_test):
+        '''
+        Trains the perceptron.
+
+        Args:
+            x_train : The input training data.
+
+            x_test : The input testing/validation data.
+
+            y_train : The required output of the perceptron of the training
+                data. Should be onehot vectors.
+
+            y_test : The required output of the perceptron of the 
+                testing/validation data. Should be onehot vectors.
+
+        Sets:
+        At the beginning of each epoch:
+            accuracy_train
+
+            accuracy_test
+
+            mse_train : mean-squared error
+
+            mse_test 
+
+            mae_train : mean absolute error
+
+            mae_test
+
+            cross_entropy_train : loss function for perceptron (cross entropy).
+
+            cross_entropy_test
+
+        Returns:
+            y_train_pred : The predicted output of the perceptron on the 
+                training data.
+
+            y_test_pred : The predicted output of the perceptron on the
+                testing data.
+        '''
         rng = np.random.default_rng()
 
         N_samples = y_train.shape[0]
@@ -123,6 +222,10 @@ class Perceptron(NeuralNetwork):
         return y_train_pred, y_test_pred
     
     def predict(self, x):
+        '''
+        Predict the classification of a single sample as a onehot vector. 
+        x is an array that encodes information about the sample.
+        '''
         return self.activation_function(x)
     
     @property
@@ -139,24 +242,42 @@ class Perceptron(NeuralNetwork):
     
     @property
     def mse_train(self):
+        '''
+        Mean-squared error.
+        '''
         return self._mse_train
 
     @property 
     def mse_test(self):
+        '''
+        Mean-squared error.
+        '''
         return self._mse_test
     
     @property
     def mae_train(self):
+        '''
+        Mean-absolute error.
+        '''
         return self._mae_train
 
     @property 
     def mae_test(self):
+        '''
+        Mean-absolute error.
+        '''
         return self._mae_test
     
     @property
     def cross_entropy_train(self):
+        '''
+        Loss function (cross entropy).
+        '''
         return self._cross_entropy_train
 
     @property 
     def cross_entropy_test(self):
+        '''
+        Loss function (cross entropy).
+        '''
         return self._cross_entropy_test

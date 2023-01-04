@@ -57,3 +57,23 @@ def ising_hamiltonian(N, g, alpha):
                     coupling = J / np.power( np.abs(i-j), alpha)
                     H += coupling * sz_list[i] * sz_list[j]
     return H
+
+def xyz_chain(N, Delta, gamma=0, g=0):
+    
+    sx_list = get_spin_ops(N=N, axis='x')
+    sy_list = get_spin_ops(N=N, axis='y')
+    sz_list = get_spin_ops(N=N, axis='z')
+
+    J = 1
+
+    H = 0
+    
+    for n in range(N):
+        H -= g * sz_list[n]
+
+    for n in range(N):
+        H += J * (1.0 + gamma) * sx_list[n] * sx_list[(n+1) % N]
+        H += J * (1.0 + gamma) * sy_list[n] * sy_list[(n+1) % N]
+        H += J * Delta * sz_list[n] * sz_list[(n+1) % N]
+
+    return H

@@ -80,14 +80,47 @@ def _get_U_diag(eigs, H, dt):
     return U_diag
 
 class Evolver(object):
+    '''
+    Evolves a collection of initial states psi0 with the unitary 
+    U=exp(-i H t). The collection of psi0 may be samples for a machine 
+    learning task.
+
+    Args:
+        N : Number of lattice sites.
+
+        g : Ising : transverse field. 
+            XYZ : Zeeman field.
+
+        alpha : Ising : Power law coupling strength.
+                XYZ : ZZ coupling strength.
+
+        filename : Output filename.
+
+        model : (Default 'ising') The type of model to solve. Choices are 
+            the transverse field Ising model and spin-1/2 XYZ chain.
+
+        solver : (Default 'expm') Whether the unitary is in the computational 
+            basis or is evolved in the diagonal basis. Options are 'expm' or 
+            'expm_diag'.
+
+        dt : (Default 1) Time step for solver.
+
+        tf : (Default 5) The final time.
+
+        N_samples_train L: (Default All) Number of train samples to evolve.
+
+        N_samples_test : (Default All) Number of test samples to evolve.
+
+        save : (Default False) Whether to save the wavefunction to a file.
+    '''
     def __init__(self, N, 
                        g,
+                       alpha,
                        filename,
                        model='ising', 
                        solver='expm', 
-                       dt=10, 
-                       tf=50, 
-                       alpha=1.51, 
+                       dt=1, 
+                       tf=5, 
                        N_samples_train=None, 
                        N_samples_test=None,
                        save=False):
@@ -122,9 +155,9 @@ class Evolver(object):
         # Construct Hamiltonian
         if self._model == 'ising':
             self._H = ising_hamiltonian(N=self._N, g=self._g, alpha=self._alpha)
-        elif self._model == 'spin-1/2':
-            raise ValueError(f'{self._model} not implemented yet !')
-        elif self._model == 'spin-1':
+        elif self._model == 'xyz':
+            self._H = xyz_chain(N=self._N, Delta=self._alpha, g=self._g)
+        elif self._model == 'xyz-spin-1':
             raise ValueError(f'{self._model} not implemented yet !')
         else:
             raise ValueError(f'unrecognized model {self._model} !')

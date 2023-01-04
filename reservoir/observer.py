@@ -36,7 +36,37 @@ def _entropy(N, psi, sparse=False):
     #entropy_mutual = qt.entropy.entropy_mutual(rho, half_ind, half_compliment_ind, sparse=sparse)
     return vals, float(np.real(-sum(vals[vals != 0] * logvals)))
 
-class Observer:
+class Observer(object):
+    '''
+    Evolves a collection of initial states psi0 with the unitary 
+    U=exp(-i H t). The collection of psi0 may be samples for a machine 
+    learning task.
+
+    Args:
+        N : Number of lattice sites.
+
+        filename : Output filename from Evolver.
+
+        N_samples_train L: (Default All) Number of train samples to evolve.
+
+        N_samples_test : (Default All) Number of test samples to evolve.
+
+        save : (Default True) Whether to save the observations to a hdf5 file.
+
+        load : (Default False) Whether to load a previously generated hdf5 
+            file of observables.
+
+        observe_list : (Default ["psi"]) A list of strings that are 
+            observables to calculate. Options are
+            psi : Coefficients of psi in the computational basis.
+            x : Expectation <S_i^x> at each site i.
+            xx : Correlation <S_i^x S_j^x> between all sites i and j.
+            z : Expectation <S_i^z> at each site i.
+            zz : Correlation <S_i^z S_j^z> between all sites i and j.
+            ee : von-Nuemann entangelement entropy. Bipartition is at center 
+                site.
+            es : Entanglement spectrum. Bipartition is at center site.
+    '''
     def __init__(self, N,
                        filename, 
                        N_samples_train=None, 

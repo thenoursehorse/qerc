@@ -8,11 +8,17 @@ from encoder.qubit_mnist import PCAQubits
 from reservoir.evolver import Evolver
 
 if __name__ == '__main__':
+    print("Ising: g tranvserse field. alpha power law coupling.")
+    print("XYZ: g Zeeman field. alpha ZZ coupling.")
     parser = argparse.ArgumentParser()
     parser.add_argument('-N', type=int, required=True)
     parser.add_argument('-g', type=float, required=True)
+    parser.add_argument('-alpha', type=float, required=True)
+    parser.add_argument('-model',
+        choices=['ising', 'xyz'],
+        required=True,
+    )
     parser.add_argument('-filename_root', required=True)
-    parser.add_argument('-alpha', type=float, default=1.51)
     parser.add_argument('-dt', type=float, default=0.5)
     parser.add_argument('-tf', type=float, default=5)
     parser.add_argument('-N_samples_train', type=int, default=60000)
@@ -20,10 +26,6 @@ if __name__ == '__main__':
     parser.add_argument('-solver',
         choices=['expm'],
         default='expm',
-    )
-    parser.add_argument('-model',
-        choices=['ising', 'spin-1/2', 'spin-1'],
-        default='ising',
     )
     parser.add_argument('-save', type=lambda x: bool(strtobool(x)), default='True')
 
