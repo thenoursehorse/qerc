@@ -45,7 +45,7 @@ def _IMqrginv(A, eps=None):
     if eps != None:
         eps = 1e-5 # recommendation from paper
         # The k below introduces error for not much greater speed up
-        k = np.sum(np.any(np.abs(R) > epse, axis=1))
+        k = np.sum(np.any(np.abs(R) > eps, axis=1))
         Q = Q[:,:k]
         R = R[:k,:]
     M = np.linalg.inv( R @ R.conj().T )

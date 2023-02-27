@@ -29,8 +29,8 @@ class FigureWrapper(object):
 class Plotter(object):
     def __init__(self, g_list, 
                        N_list, 
-                       model='ising', 
-                       alpha=1.51, 
+                       alpha, 
+                       model, 
                        node_type='rho_diag', 
                        activation='softmax', 
                        filename_root = 'data/', 
@@ -41,10 +41,10 @@ class Plotter(object):
                        save_root='figs/',
                        nn_type='perceptron'
                        ):
-        self._g_list = g_list
         self._N_list = N_list
-        self._model = model
+        self._g_list = g_list
         self._alpha = alpha
+        self._model = model
         self._node_type = node_type
         self._activation = activation
         self._filename_root = filename_root
@@ -57,8 +57,20 @@ class Plotter(object):
         self._show = show
         self._save_root = save_root
 
+        self._clip_on = True
+
     def load(self):
-        filename_params = f'{self._model}_N_{self._N}_g_{self._g:0.3f}_alpha_{self._alpha:0.3f}'
+        # HACK because I did stupid naming conventions
+        if self._model == 'ising':
+            g = self._g
+            alpha = self._alpha
+        elif self._model == 'xyz':
+            g = self._alpha
+            alpha = self._g
+        else:
+            raise ValueError("Unrecognized model !")
+
+        filename_params = f'{self._model}_N_{self._N}_g_{g:0.3f}_alpha_{alpha:0.3f}'
         filename = self._filename_root
         filename += filename_params+"/"+filename_params
         filename += "_" + self._nn_type
@@ -306,10 +318,10 @@ class Plotter(object):
             #accuracy_max = self.log_func(10000, *popt)
             #axis[0].plot([0, np.max(x)], [accuracy_max, accuracy_max], '--', color=color[i])
             
-            axis[0].plot(x, accuracy[:,n], linestyle='None', color=color[i], marker=marker[i], label=data, clip_on=False, zorder=10)
-            axis[0].plot(x, accuracy[:,n], '-', color=color[i], clip_on=False, zorder=10)
-            axis[1].plot(x, mse[:,n], linestyle='None', color=color[i], marker=marker[i], clip_on=False, zorder=10)
-            axis[1].plot(x, mse[:,n], '-', color=color[i], clip_on=False, zorder=10)
+            axis[0].plot(x, accuracy[:,n], linestyle='None', color=color[i], marker=marker[i], label=data, clip_on=self._clip_on, zorder=10)
+            axis[0].plot(x, accuracy[:,n], '-', color=color[i], clip_on=self._clip_on, zorder=10)
+            axis[1].plot(x, mse[:,n], linestyle='None', color=color[i], marker=marker[i], clip_on=self._clip_on, zorder=10)
+            axis[1].plot(x, mse[:,n], '-', color=color[i], clip_on=self._clip_on, zorder=10)
             #axis[2].plot(x, mae[:,n], linestyle='None', color=color[i], marker=marker[i], clip_on=False, zorder=10)
             #axis[2].plot(x, mae[:,n], '-', color=color[i], clip_on=False, zorder=10)
 
@@ -361,8 +373,8 @@ class Plotter(object):
             accuracy, avg, std, mse, mae = self._data_picker(data=data)
             y = accuracy[1:,n,0] # ignore the 0th epoch, only take 1 realiziation to show trend
             
-            axis[0].plot(x, y, linestyle='None', clip_on=False, label=data, zorder = 10, color=color[i], marker=marker[i])
-            axis[0].plot(x, y, '-', clip_on=False, zorder = 10, color=color[i])
+            axis[0].plot(x, y, linestyle='None', clip_on=self._clip_on, label=data, zorder = 10, color=color[i], marker=marker[i])
+            axis[0].plot(x, y, '-', clip_on=self._clip_on, zorder = 10, color=color[i])
     
         xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
         
@@ -372,11 +384,21 @@ class Plotter(object):
         axis[0].legend(frameon=False)
         axis[0].set_xlabel('Epoch')
         
-        title = f'{self._nn_type}     N = {N}     g = {g}     $\\alpha$ = {self._alpha}     time = {time}'
+        if self._model == 'ising':
+            title = f'{self._model}     N = {N}     g = {g}     $\\alpha$ = {self._alpha}     time = {time}'
+        elif self._model == 'xyz':
+            title = f'{self._model}     N = {N}     $\\Delta$ = {g}     time = {time}'
+        else:
+            raise ValueError("Unrecognized model !")
         fig.suptitle(title)
         
         if self._save:
-            filename = f"{self._nn_type}_epochs_N_{self._N}_g_{self._g}_t_{time}"
+            if self._model == 'ising':
+                filename = f"epochs_N_{self._N}_g_{self._g}_t_{time}"
+            elif self._model == 'xyz':
+                filename = f"epochs_N_{self._N}_Delta_{self._g}_t_{time}"
+            else:
+                raise ValueError("Unrecognized model !")
             plt.savefig(self._save_root+filename+'.pdf')
 
         if self._show:
@@ -398,8 +420,8 @@ class Plotter(object):
             y = avg
             y_err = std
             
-            axis[0].plot(x, y, linestyle='None', clip_on=False, label=data, zorder = 10, color=color[i], marker=marker[i])
-            axis[0].plot(x, y, '-', clip_on=False, zorder = 10, color=color[i])
+            axis[0].plot(x, y, linestyle='None', clip_on=self._clip_on, label=data, zorder = 10, color=color[i], marker=marker[i])
+            axis[0].plot(x, y, '-', clip_on=self._clip_on, zorder = 10, color=color[i])
             axis[0].fill_between(x, y-y_err, y+y_err, alpha=0.5, antialiased=True, color=color[i], linewidth=0.0)
         
         xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
@@ -410,11 +432,21 @@ class Plotter(object):
         axis[0].legend(frameon=False)
         axis[0].set_xlabel(r'$t J$')
         
-        title = f'{self._nn_type}     N = {N}     g = {g}     $\\alpha$ = {self._alpha}'
+        if self._model == 'ising':
+            title = f'{self._model}     N = {N}     g = {g}     $\\alpha$ = {self._alpha}'
+        elif self._model == 'xyz':
+            title = f'{self._model}     N = {N}     $\\Delta$ = {g}'
+        else:
+            raise ValueError("Unrecognized model !")
         fig.suptitle(title)
         
         if self._save:
-            filename = f"{self._nn_type}_time_N_{self._N}_g_{self._g}"
+            if self._model == 'ising':
+                filename = f"time_N_{self._N}_g_{self._g}"
+            elif self._model == 'xyz':
+                filename = f"time_N_{self._N}_Delta_{self._g}"
+            else:
+                raise ValueError("Unrecognized model !")
             plt.savefig(self._save_root+filename+'.pdf')
 
         if self._show:
@@ -443,8 +475,8 @@ class Plotter(object):
                 y[j] = avg[n]
                 y_err[j] = std[n]
             
-            axis[0].plot(x, y, linestyle='None', clip_on=False, color=color[i], marker=marker[i], label=data, zorder=10)
-            axis[0].plot(x, y, '-', clip_on=False, color=color[i], zorder=10)
+            axis[0].plot(x, y, linestyle='None', clip_on=self._clip_on, color=color[i], marker=marker[i], label=data, zorder=10)
+            axis[0].plot(x, y, '-', clip_on=self._clip_on, color=color[i], zorder=10)
             axis[0].fill_between(x, y-y_err, y+y_err, alpha=0.5, antialiased=True, color=color[i], linewidth=0.0)
         
         xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
@@ -455,11 +487,21 @@ class Plotter(object):
         axis[0].set_xlim(xmin=xmin, xmax=xmax)
         axis[0].legend(frameon=False)
         
-        title = f'{self._nn_type}     g = {g}     $\\alpha$ = {self._alpha}     t = {time}'
+        if self._model == 'ising':
+            title = f'{self._model}     g = {g}     $\\alpha$ = {self._alpha}     t = {time}'
+        elif self._model == 'xyz':
+            title = f'{self._model}     $\\Delta$ = {g}     t = {time}'
+        else:
+            raise ValueError("Unrecognized model !")
         fig.suptitle(title)
         
         if self._save:
-            filename = f"{self._nn_type}_scaleN_g_{self._g}_t_{time}"
+            if self._model == 'ising':
+                filename = f"scaleN_g_{self._g}_t_{time}"
+            elif self._model == 'xyz':
+                filename = f"scaleN_Delta_{self._g}_t_{time}"
+            else:
+                raise ValueError("Unrecognized model !")
             plt.savefig(self._save_root+filename+'.pdf')
 
         if self._show:
@@ -490,8 +532,8 @@ class Plotter(object):
                     y[j] = avg[n]
                     y_err[j] = std[n]
 
-                axis[i].plot(x, y, linestyle='None', clip_on=False, label=f'g = {self._g:.2f}', zorder = 10, color=color[k], marker=marker[k])
-                axis[i].plot(x, y, '-', clip_on=False, zorder = 10, color=color[k])
+                axis[i].plot(x, y, linestyle='None', clip_on=self._clip_on, label=f'g = {self._g:.2f}', zorder = 10, color=color[k], marker=marker[k])
+                axis[i].plot(x, y, '-', clip_on=self._clip_on, zorder = 10, color=color[k])
                 axis[i].fill_between(x, y-y_err, y+y_err, alpha=0.5, antialiased=True, color=color[k], linewidth=0.0)
         
         xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
@@ -506,11 +548,16 @@ class Plotter(object):
         axis[1].set_xlim(xmin=xmin, xmax=xmax)
         axis[1].legend(frameon=False)
         
-        title = f'{self._nn_type}     $\\alpha$ = {self._alpha}     t = {time}'
+        if self._model == 'ising':
+            title = f'{self._model}     $\\alpha$ = {self._alpha}     t = {time}'
+        elif self._model == 'xyz':
+            title = f'{self._model}     t = {time}'
+        else:
+            raise ValueError("Unrecognized model !")
         fig.suptitle(title)
         
         if self._save:
-            filename = f"{self._nn_type}_scaleN_t_{time}"
+            filename = f"scaleN_t_{time}"
             plt.savefig(self._save_root+filename+'.pdf')
 
         if self._show:
@@ -549,23 +596,33 @@ class Plotter(object):
                 y[j] = avg[n]
                 y_err[j] = std[n]
         
-            axis[0].plot(x, y, linestyle='None', clip_on=False, color=color[i], marker=marker[i], label=data, zorder=10)
-            axis[0].plot(x, y, '-', clip_on=False, color=color[i], zorder=10)
+            axis[0].plot(x, y, linestyle='None', clip_on=self._clip_on, color=color[i], marker=marker[i], label=data, zorder=10)
+            axis[0].plot(x, y, '-', clip_on=self._clip_on, color=color[i], zorder=10)
             axis[0].fill_between(x, y-y_err, y+y_err, alpha=0.5, antialiased=True, color=color[i], linewidth=0.0)
         
         xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
         
-        axis[0].set_xlabel(r'$g / J$')
+        if self._model == 'ising':
+            axis[0].set_xlabel(r'$g / J$')
+        elif self._model == 'xyz':
+            axis[0].set_xlabel(r'$\Delta / J$')
+        else:
+            raise ValueError("Unrecognized model !")
         axis[0].set_ylabel('Acc.')
         axis[0].set_ylim(ymin=ymin, ymax=ymax)
         axis[0].set_xlim(xmin=xmin, xmax=xmax)
         axis[0].legend(frameon=False)
         
-        title = f'{self._nn_type}     N = {N}     $\\alpha$ = {self._alpha}     t = {time}'
+        if self._model == 'ising':
+            title = f'{self._model}     N = {N}     $\\alpha$ = {self._alpha}     t = {time}'
+        elif self._model == 'xyz':
+            title = f'{self._model}     N = {N}     t = {time}'
+        else:
+            raise ValueError("Unrecognized model !")
         fig.suptitle(title)
         
         if self._save:
-            filename = f"{self._nn_type}_g_all_N_{self._N}_t_{time}"
+            filename = f"g_all_N_{self._N}_t_{time}"
             plt.savefig(self._save_root+filename+'.pdf')
 
         if self._show:
@@ -596,8 +653,8 @@ class Plotter(object):
                     y[j] = avg[n]
                     y_err[j] = std[n]
 
-                axis[i].plot(x, y, linestyle='None', clip_on=False, label=f'N = {self._N}', color=color[k], marker=marker[k], zorder=10)
-                axis[i].plot(x, y, '-', clip_on=False, color=color[k], zorder=10)
+                axis[i].plot(x, y, linestyle='None', clip_on=self._clip_on, label=f'N = {self._N}', color=color[k], marker=marker[k], zorder=10)
+                axis[i].plot(x, y, '-', clip_on=self._clip_on, color=color[k], zorder=10)
                 axis[i].fill_between(x, y-y_err, y+y_err, alpha=0.5, antialiased=True, color=color[k], linewidth=0.0)
         
         xmin, xmax, ymin, ymax = self._axis_limits(x=x, y=y, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
@@ -611,13 +668,23 @@ class Plotter(object):
         #axis[1].set_ylim(ymin=0.7, ymax=1.0)
         axis[1].set_ylim(ymin=ymin, ymax=ymax)
         axis[1].set_xlim(xmin=xmin, xmax=xmax)
-        axis[1].set_xlabel(r'$g / J$')
+        if self._model == 'ising':
+            axis[1].set_xlabel(r'$g / J$')
+        elif self._model == 'xyz':
+            axis[1].set_xlabel(r'$\Delta / J$')
+        else:
+            raise ValueError("Unrecognized model !")
 
-        title = f'{self._nn_type}     $\\alpha$ = {self._alpha}     t = {time}'
+        if self._model == 'ising':
+            title = f'{self._model}     $\\alpha$ = {self._alpha}     t = {time}'
+        elif self._model == 'xyz':
+            title = f'{self._model}     t = {time}'
+        else:
+            raise ValueError("Unrecognized model !")
         fig.suptitle(title)
         
         if self._save:
-            filename = f"{self._nn_type}_g_all_t_{time}"
+            filename = f"g_all_t_{time}"
             plt.savefig(self._save_root+filename+'.pdf')
 
         if self._show:
