@@ -5,7 +5,7 @@ from pathlib import Path
 
 import qutip as qt
 
-from .encoder import Encoder
+from qerc.encoder.encoder import Encoder
 
 class PCAQubits(Encoder):
     def __init__(self, load=True, **kwargs):

@@ -1,6 +1,6 @@
 import numpy as np
 import scipy
-from .nn import NeuralNetwork
+from qerc.classifier.nn import NeuralNetwork
         
 # From Fast Computation of Moore-Penrose Inverse Matrices by Pierre Courrieu 2005
 # Returns the Moore-Penrose inverse of the argument

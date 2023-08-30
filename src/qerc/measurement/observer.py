@@ -5,7 +5,7 @@ from pathlib import Path
 
 import qutip as qt
 
-from .hamiltonians import get_spin_ops
+from qerc.reservoir.hamiltonians import get_spin_ops
 
 def _vn_spectrum(rho, base=np.e, sparse=False):
     if rho.type == 'ket' or rho.type == 'bra':

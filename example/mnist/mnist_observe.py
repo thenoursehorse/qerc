@@ -4,7 +4,7 @@ import argparse
 
 import numpy as np
 
-from reservoir.observer import Observer
+from qerc.measurement.observer import Observer
 
 if __name__ == '__main__':
     print("Ising: g tranvserse field. alpha power law coupling.")

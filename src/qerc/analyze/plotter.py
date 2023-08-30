@@ -5,7 +5,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from pylab import cm
         
-from nnetwork.nndata import NNData
+from qerc.classifier.nndata import NNData
 
 plt.rcParams.update({
     #'text.usetex' : True

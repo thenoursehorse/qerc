@@ -4,7 +4,7 @@ import argparse
 
 import numpy as np
 
-from encoder.qubit_mnist import PCAQubits
+from qerc.encoder.qubit_mnist import PCAQubits
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

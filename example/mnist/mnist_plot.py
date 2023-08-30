@@ -4,7 +4,7 @@ import argparse
 
 import numpy as np
 
-from analyze.plotter import Plotter
+from qerc.analyze.plotter import Plotter
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

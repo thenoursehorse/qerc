@@ -1,6 +1,6 @@
 import numpy as np
 from copy import deepcopy
-from .nn import NeuralNetwork, AdaDelta, Adam, NAG, SGD, weight_initializer, Annealing
+from qerc.classifier.nn import NeuralNetwork, AdaDelta, Adam, NAG, SGD, weight_initializer, Annealing
         
 class Perceptron(NeuralNetwork):
     '''

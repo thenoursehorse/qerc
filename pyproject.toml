@@ -1,0 +1,33 @@
+[project]
+name = "qerc"
+version = "0.0.1"
+description = "Quantum extreme reservoir computing."
+readme = "README.md"
+requires-python = ">=3.7"
+license = {file = "LICENSE"}
+keywords = ["quantum", "machine learning"]
+authors = [
+  {name = "H. L. Nourse"}
+]
+dependencies = [
+  "numpy",
+  "scipy",
+  "h5py",
+  "qutip",
+  "scikit-learn"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/thenoursehorse/qerc"
+
+[tool.setuptools]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"

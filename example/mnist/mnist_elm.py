@@ -6,9 +6,9 @@ from timeit import default_timer as timer
 import h5py
 import numpy as np
 
-from encoder.qubit_mnist import PCAQubits
-from nnetwork.elm import ELM
-from reservoir.observer import Observer
+from qerc.encoder.qubit_mnist import PCAQubits
+from qerc.classifier.elm import ELM
+from qerc.measurement.observer import Observer
 
 if __name__ == '__main__':
     print("Ising: g tranvserse field. alpha power law coupling.")

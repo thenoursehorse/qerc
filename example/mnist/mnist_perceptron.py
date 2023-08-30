@@ -6,9 +6,9 @@ from itertools import product
 
 import numpy as np
 
-from encoder.qubit_mnist import PCAQubits
-from nnetwork.perceptron import Perceptron
-from reservoir.observer import Observer
+from qerc.encoder.qubit_mnist import PCAQubits
+from qerc.classifier.perceptron import Perceptron
+from qerc.measurement.observer import Observer
 
 if __name__ == '__main__':
     print("Ising: g tranvserse field. alpha power law coupling.")
